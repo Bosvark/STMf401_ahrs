@@ -1,0 +1,7 @@
+.settings/
+.cproject
+.project
+**.o
+**.d
+**.bin
+**.elf
