@@ -6,7 +6,7 @@ SRCDIR=./source
 LDDIR=./ldscripts
  
 #CUBEDIR=../STM32Cube_FW_F4_V1.1.0
-CUBEDIR=/home/dieter/STM32/stm32f401/workspace/STM32Cube_FW_F4_V1.1.0
+CUBEDIR=../STM32Cube_FW_F4_V1.1.0
 
 # build environment
 PREFIX ?= 
