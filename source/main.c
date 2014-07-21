@@ -1,12 +1,33 @@
-#include "main.h"
-#include "stm32f401_discovery.h"
-
 #include <usbd_core.h>
 #include <usbd_cdc.h>
 #include <usbd_cdc_if_template.h>
 #include <usbd_desc.h>
+#include <stm32f4xx_hal.h>
+#include <stm32f401_discovery.h>
+#include <stm32f401_discovery_gyroscope.h>
+#include <stm32f401_discovery_accelerometer.h>
+#include "usbd_conf.h"
+#include "usbd_desc.h"
+
+typedef struct
+{
+	float x;
+	float y;
+	float z;
+}Point3df;
+
+typedef struct
+{
+	int16_t x;
+	int16_t y;
+	int16_t z;
+}Point3di;
 
 USBD_HandleTypeDef USBD_Device;
+
+void gyro_read(Point3df *xyz);
+void accelerometer_read(Point3di *xyz);
+void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
 
 static void SystemClock_Config(void);
 
@@ -23,22 +44,88 @@ int main(void)
 	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
 	USBD_Start(&USBD_Device);
 
+	BSP_GYRO_Init();
+	BSP_ACCELERO_Init();
+
 	BSP_LED_Off(LED4);
 
-	char byte;
 	for(;;){
-/*
-		BSP_LED_Toggle(LED4);
-		HAL_Delay(500);
-*/
-		if (VCP_read(&byte, 1) != 1)
-			continue;
+		Point3df gyro_xyz;
+		gyro_read(&gyro_xyz);
 
-		BSP_LED_Toggle(LED4);
-		VCP_write("\r\nYou typed ", 12);
-		VCP_write(&byte, 1);
-		VCP_write("\r\n", 2);
-		BSP_LED_Toggle(LED4);
+		Point3di accel_xyz;
+		accelerometer_read(&accel_xyz);
+
+		char outbuff[80];
+		int pos=0;
+
+		outbuff[pos++] = 0x02;		// STX
+
+		// Gyro points
+		hex_to_ascii((unsigned char*)&gyro_xyz.x, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&gyro_xyz.y, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&gyro_xyz.z, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		// Accelerometer points
+		hex_to_ascii((unsigned char*)&accel_xyz.x, &outbuff[pos], sizeof(int16_t));
+		pos += sizeof(int16_t)*2;
+
+		hex_to_ascii((unsigned char*)&accel_xyz.y, &outbuff[pos], sizeof(int16_t));
+		pos += sizeof(int16_t)*2;
+
+		hex_to_ascii((unsigned char*)&accel_xyz.z, &outbuff[pos], sizeof(int16_t));
+		pos += sizeof(int16_t)*2;
+
+		outbuff[pos++] = 0x03;		// ETX
+
+		VCP_write(outbuff, pos);
+
+		HAL_Delay(100);
+	}
+}
+
+void gyro_read(Point3df *xyz)
+{
+	float gyro_xyz[3];
+
+	BSP_GYRO_GetXYZ(gyro_xyz);
+
+	xyz->x = gyro_xyz[0];
+	xyz->y = gyro_xyz[1];
+	xyz->z = gyro_xyz[2];
+}
+
+void accelerometer_read(Point3di *xyz)
+{
+	int16_t accel_xyz[3];
+
+	BSP_ACCELERO_GetXYZ(accel_xyz);
+
+	xyz->x = accel_xyz[0];
+	xyz->y = accel_xyz[1];
+	xyz->z = accel_xyz[2];
+}
+
+const char    hexlookup[] = {"0123456789ABCDEF"};
+
+void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length)
+{
+	unsigned int i;
+	unsigned char temp;
+
+	for (i = 0; i < source_length; i++) {
+		temp = source[i];
+		temp >>= 4;
+		dest[i*2] = hexlookup[temp];
+
+		temp = source[i];
+		temp &= 0x0f;
+		dest[(i*2)+1] = hexlookup[temp];
 	}
 }
 

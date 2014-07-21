@@ -5,7 +5,8 @@ INCDIR=./include
 SRCDIR=./source
 LDDIR=./ldscripts
  
-CUBEDIR=../STM32Cube_FW_F4_V1.1.0
+#CUBEDIR=../STM32Cube_FW_F4_V1.1.0
+CUBEDIR=/home/dieter/STM32/stm32f401/workspace/STM32Cube_FW_F4_V1.1.0
 
 # build environment
 PREFIX ?= 
@@ -20,7 +21,11 @@ INCLUDES    += -I$(CUBEDIR)/Drivers/CMSIS/Include
 INCLUDES    += -I$(CUBEDIR)/Drivers/BSP/STM32F401-Discovery
 INCLUDES    += -I$(CUBEDIR)/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
 INCLUDES    += -I$(CUBEDIR)/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
- 
+INCLUDES    += -I$(CUBEDIR)/Drivers/BSP/Components/Common
+INCLUDES    += -I$(CUBEDIR)/Drivers/BSP/Components/l3gd20
+INCLUDES    += -I$(CUBEDIR)/Drivers/BSP/Components/lsm303dlhc
+INCLUDES    += -I$(CUBEDIR)/Drivers/BSP/STM32F401-Discovery
+
 # source files
 SOURCES_ASM += startup_stm32f401xc.s
 SOURCES_C   += $(CUBEDIR)/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
@@ -37,6 +42,10 @@ SOURCES_C   += $(CUBEDIR)/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_usb.c
 SOURCES_C   += $(CUBEDIR)/Drivers/BSP/STM32F401-Discovery/stm32f401_discovery.c
 SOURCES_C   += $(wildcard $(CUBEDIR)/Middlewares/ST/STM32_USB_Device_Library/Core/Src/*.c)
 SOURCES_C   += $(wildcard $(CUBEDIR)/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/*.c)
+SOURCES_C   += $(CUBEDIR)/Drivers/BSP/Components/l3gd20/l3gd20.c
+SOURCES_C   += $(CUBEDIR)/Drivers/BSP/Components/lsm303dlhc/lsm303dlhc.c
+SOURCES_C   += $(CUBEDIR)/Drivers/BSP/STM32F401-Discovery/stm32f401_discovery_gyroscope.c
+SOURCES_C   += $(CUBEDIR)/Drivers/BSP/STM32F401-Discovery/stm32f401_discovery_accelerometer.c
 SOURCES_C   += $(wildcard $(SRCDIR)/*.c)
 
 SOURCES_LD  := $(LDDIR)/STM32F401CC_FLASH.ld
