@@ -58,7 +58,7 @@ OBJS	+= $(patsubst %.s,%.o,$(SOURCES_ASM))
 # Build flags
 DEPENDFLAGS := -MD -MP
 BASEFLAGS = -mcpu=cortex-m4 -mthumb -mthumb-interwork -O0 -Wall  -g3 
-COMPFLAGS = -DUSE_HAL_DRIVER -DUSE_USB_FS -DSTM32F401xC -DHSE_VALUE=8000000 -DDEBUG
+COMPFLAGS = -DUSE_HAL_DRIVER -DUSE_USB_FS -DMAGNET -DSTM32F401xC -DHSE_VALUE=8000000 -DDEBUG
 LDFLAGS   += $(LDS) -Xlinker --gc-sections
 # -L"$(LDDIR)"
 #-nostartfiles -nostdlib 
