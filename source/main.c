@@ -6,8 +6,11 @@
 #include <stm32f401_discovery.h>
 #include <stm32f401_discovery_gyroscope.h>
 #include <stm32f401_discovery_accelerometer.h>
+#include <math.h>
 #include "usbd_conf.h"
 #include "usbd_desc.h"
+
+#define PI			3.142857143F
 
 typedef struct
 {
@@ -16,17 +19,13 @@ typedef struct
 	float z;
 }Point3df;
 
-typedef struct
-{
-	int16_t x;
-	int16_t y;
-	int16_t z;
-}Point3di;
-
 USBD_HandleTypeDef USBD_Device;
 
 void gyro_read(Point3df *xyz);
-void accelerometer_read(Point3di *xyz);
+void accelerometer_read(Point3df *xyz);
+void MagInit(void);
+static void MagPointRaw(Point3df *magpoint);
+static float MagHeading(Point3df *magpoint, Point3df *accpoint);
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
 
 static void SystemClock_Config(void);
@@ -46,15 +45,23 @@ int main(void)
 
 	BSP_GYRO_Init();
 	BSP_ACCELERO_Init();
+	MagInit();
 
 	BSP_LED_Off(LED4);
 
 	for(;;){
+		BSP_LED_Toggle(LED4);
+
 		Point3df gyro_xyz;
 		gyro_read(&gyro_xyz);
 
-		Point3di accel_xyz;
+		Point3df accel_xyz;
 		accelerometer_read(&accel_xyz);
+
+		Point3df mag_xyz;
+		MagPointRaw(&mag_xyz);
+
+		float heading = MagHeading(&mag_xyz, &accel_xyz);
 
 		char outbuff[80];
 		int pos=0;
@@ -72,14 +79,28 @@ int main(void)
 		pos += sizeof(float)*2;
 
 		// Accelerometer points
-		hex_to_ascii((unsigned char*)&accel_xyz.x, &outbuff[pos], sizeof(int16_t));
-		pos += sizeof(int16_t)*2;
+		hex_to_ascii((unsigned char*)&accel_xyz.x, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
 
-		hex_to_ascii((unsigned char*)&accel_xyz.y, &outbuff[pos], sizeof(int16_t));
-		pos += sizeof(int16_t)*2;
+		hex_to_ascii((unsigned char*)&accel_xyz.y, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
 
-		hex_to_ascii((unsigned char*)&accel_xyz.z, &outbuff[pos], sizeof(int16_t));
-		pos += sizeof(int16_t)*2;
+		hex_to_ascii((unsigned char*)&accel_xyz.z, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		// Magnetometer points
+		hex_to_ascii((unsigned char*)&mag_xyz.x, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&mag_xyz.y, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&mag_xyz.z, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		// Heading
+		hex_to_ascii((unsigned char*)&heading, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
 
 		outbuff[pos++] = 0x03;		// ETX
 
@@ -100,15 +121,65 @@ void gyro_read(Point3df *xyz)
 	xyz->z = gyro_xyz[2];
 }
 
-void accelerometer_read(Point3di *xyz)
+void accelerometer_read(Point3df *xyz)
 {
 	int16_t accel_xyz[3];
 
 	BSP_ACCELERO_GetXYZ(accel_xyz);
 
-	xyz->x = accel_xyz[0];
-	xyz->y = accel_xyz[1];
-	xyz->z = accel_xyz[2];
+	xyz->x = (float)accel_xyz[0];
+	xyz->y = (float)accel_xyz[1];
+	xyz->z = (float)accel_xyz[2];
+}
+
+void MagInit(void)
+{
+	LSM303DLHCMag_InitTypeDef LSM303DLHC_InitStruct;
+	LSM303DLHC_InitStruct.Temperature_Sensor = LSM303DLHC_TEMPSENSOR_ENABLE;
+	LSM303DLHC_InitStruct.MagOutput_DataRate = LSM303DLHC_ODR_220_HZ;
+	LSM303DLHC_InitStruct.Working_Mode = LSM303DLHC_CONTINUOS_CONVERSION;
+	LSM303DLHC_InitStruct.MagFull_Scale = 32; // LSM303DLHC_M_SENSITIVITY_XY_1_3Ga;
+	LSM303DLHC_MagInit(&LSM303DLHC_InitStruct);
+}
+
+static void MagPointRaw(Point3df *magpoint)
+{
+	int16_t mag_xyz[3];
+	uint8_t tmpbuffer[6] ={0};
+
+	for(int i=0; i<6; i++)
+		tmpbuffer[i] = COMPASSACCELERO_IO_Read(MAG_I2C_ADDRESS, LSM303DLHC_OUT_X_H_M+i);
+
+	mag_xyz[0] = (int16_t)((tmpbuffer[0] << 8) + tmpbuffer[1]);	// Mx
+	mag_xyz[1] = (int16_t)((tmpbuffer[4] << 8) + tmpbuffer[5]);	// My
+	mag_xyz[2] = (int16_t)((tmpbuffer[2] << 8) + tmpbuffer[3]);	// Mz
+
+	magpoint->x = (float)mag_xyz[0];
+	magpoint->y = (float)mag_xyz[1];
+	magpoint->z = (float)mag_xyz[2];
+}
+
+static float MagHeading(Point3df *magpoint, Point3df *accpoint)
+{
+	// Normalize acceleration measurements so they range from 0 to 1
+	float accxnorm = accpoint->x/sqrtf(accpoint->x*accpoint->x+accpoint->y*accpoint->y+accpoint->z*accpoint->z);
+	float accynorm = accpoint->y/sqrtf(accpoint->x*accpoint->x+accpoint->y*accpoint->y+accpoint->z*accpoint->z);
+
+	// calculate pitch and roll
+	float Pitch = asinf(-accxnorm);
+	float Roll = asinf(accynorm/cosf(Pitch));
+
+	// tilt compensated magnetic sensor measurements
+	float magxcomp = magpoint->x*cosf(Pitch)+magpoint->z*sinf(Pitch);
+	float magycomp = magpoint->x*sinf(Roll)*sinf(Pitch)+magpoint->y*cosf(Roll)-magpoint->z*sinf(Roll)*cosf(Pitch);
+
+	// arctangent of y/x converted to degrees
+	float heading = (float)(180*atan2f(magycomp,magxcomp)/PI);
+
+	if(heading < 0)
+		heading +=360;
+
+	return heading;
 }
 
 const char    hexlookup[] = {"0123456789ABCDEF"};
