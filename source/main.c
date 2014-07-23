@@ -33,7 +33,11 @@ static void SystemClock_Config(void);
 int main(void)
 {
 	HAL_Init();
+
+	BSP_LED_Init(LED3);
 	BSP_LED_Init(LED4);
+	BSP_LED_Init(LED5);
+	BSP_LED_Init(LED6);
 
 	SystemClock_Config();
 
@@ -47,10 +51,11 @@ int main(void)
 	BSP_ACCELERO_Init();
 	MagInit();
 
-	BSP_LED_Off(LED4);
+	const float tolerance = 1000.0;
+	Point3df prev_gyro_xyz;
+	memset(&prev_gyro_xyz, 0, sizeof(Point3df));
 
 	for(;;){
-		BSP_LED_Toggle(LED4);
 
 		Point3df gyro_xyz;
 		gyro_read(&gyro_xyz);
@@ -105,6 +110,19 @@ int main(void)
 		outbuff[pos++] = 0x03;		// ETX
 
 		VCP_write(outbuff, pos);
+
+		BSP_LED_Off(LED3);
+		BSP_LED_Off(LED4);
+		BSP_LED_Off(LED5);
+		BSP_LED_Off(LED6);
+
+		if(gyro_xyz.x > prev_gyro_xyz.x + tolerance) 	BSP_LED_On(LED4);
+		else if(gyro_xyz.x < prev_gyro_xyz.x - tolerance)	BSP_LED_On(LED5);
+
+		if(gyro_xyz.y > prev_gyro_xyz.y + tolerance) 	BSP_LED_On(LED3);
+		else if(gyro_xyz.y < prev_gyro_xyz.y - tolerance)	BSP_LED_On(LED6);
+
+		memcpy(&prev_gyro_xyz, &gyro_xyz, sizeof(Point3df));
 
 		HAL_Delay(100);
 	}
