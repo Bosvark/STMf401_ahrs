@@ -159,8 +159,23 @@ static void MagPointRaw(Point3df *magpoint)
 	magpoint->z = (float)mag_xyz[2];
 }
 
+// Calibration values
+// Min X: -254.00 Min Y: -357.00 Min Z: -222.00
+// Max X:  267.00 Max Y:  204.00 Max Z:  235.00
 static float MagHeading(Point3df *magpoint, Point3df *accpoint)
 {
+	float Mag_minx = -254;
+	float Mag_miny = -357;
+	float Mag_minz = -222;
+	float Mag_maxx = 267;
+	float Mag_maxy = 204;
+	float Mag_maxz = 235;
+
+	// use calibration values to shift and scale magnetometer measurements
+	float Magx = (magpoint->x-Mag_minx)/(Mag_maxx-Mag_minx)*2-1;
+	float Magy = (magpoint->y-Mag_miny)/(Mag_maxy-Mag_miny)*2-1;
+	float Magz = (magpoint->z-Mag_minz)/(Mag_maxz-Mag_minz)*2-1;
+
 	// Normalize acceleration measurements so they range from 0 to 1
 	float accxnorm = accpoint->x/sqrtf(accpoint->x*accpoint->x+accpoint->y*accpoint->y+accpoint->z*accpoint->z);
 	float accynorm = accpoint->y/sqrtf(accpoint->x*accpoint->x+accpoint->y*accpoint->y+accpoint->z*accpoint->z);
@@ -170,8 +185,8 @@ static float MagHeading(Point3df *magpoint, Point3df *accpoint)
 	float Roll = asinf(accynorm/cosf(Pitch));
 
 	// tilt compensated magnetic sensor measurements
-	float magxcomp = magpoint->x*cosf(Pitch)+magpoint->z*sinf(Pitch);
-	float magycomp = magpoint->x*sinf(Roll)*sinf(Pitch)+magpoint->y*cosf(Roll)-magpoint->z*sinf(Roll)*cosf(Pitch);
+	float magxcomp = Magx*cosf(Pitch)+Magz*sinf(Pitch);
+	float magycomp = Magx*sinf(Roll)*sinf(Pitch)+Magy*cosf(Roll)-Magz*sinf(Roll)*cosf(Pitch);
 
 	// arctangent of y/x converted to degrees
 	float heading = (float)(180*atan2f(magycomp,magxcomp)/PI);
