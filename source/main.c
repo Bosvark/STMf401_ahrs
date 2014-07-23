@@ -49,26 +49,22 @@ int main(void)
 
 	BSP_LED_Off(LED4);
 
+	Point3df min_mag_xyz, max_mag_xyz;
+	memset(&min_mag_xyz, 0, sizeof(Point3df));
+	memset(&max_mag_xyz, 0, sizeof(Point3df));
+
 	for(;;){
 		BSP_LED_Toggle(LED4);
-
-		Point3df gyro_xyz;
-		gyro_read(&gyro_xyz);
-
-		Point3df accel_xyz;
-		accelerometer_read(&accel_xyz);
-
-		Point3df mag_xyz;
-		MagPointRaw(&mag_xyz);
-
-		float heading = MagHeading(&mag_xyz, &accel_xyz);
 
 		char outbuff[80];
 		int pos=0;
 
 		outbuff[pos++] = 0x02;		// STX
-
+/*
 		// Gyro points
+		Point3df gyro_xyz;
+		gyro_read(&gyro_xyz);
+
 		hex_to_ascii((unsigned char*)&gyro_xyz.x, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 
@@ -79,6 +75,9 @@ int main(void)
 		pos += sizeof(float)*2;
 
 		// Accelerometer points
+		Point3df accel_xyz;
+		accelerometer_read(&accel_xyz);
+
 		hex_to_ascii((unsigned char*)&accel_xyz.x, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 
@@ -87,8 +86,30 @@ int main(void)
 
 		hex_to_ascii((unsigned char*)&accel_xyz.z, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
-
+*/
 		// Magnetometer points
+		Point3df mag_xyz;
+		MagPointRaw(&mag_xyz);
+
+		if(mag_xyz.x < min_mag_xyz.x) min_mag_xyz.x = mag_xyz.x;
+		if(mag_xyz.y < min_mag_xyz.y) min_mag_xyz.y = mag_xyz.y;
+		if(mag_xyz.z < min_mag_xyz.z) min_mag_xyz.z = mag_xyz.z;
+
+		if(mag_xyz.x > max_mag_xyz.x) max_mag_xyz.x = mag_xyz.x;
+		if(mag_xyz.y > max_mag_xyz.y) max_mag_xyz.y = mag_xyz.y;
+		if(mag_xyz.z > max_mag_xyz.z) max_mag_xyz.z = mag_xyz.z;
+
+		//Min mag points
+		hex_to_ascii((unsigned char*)&min_mag_xyz.x, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&min_mag_xyz.y, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&min_mag_xyz.z, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		// Raw mag points
 		hex_to_ascii((unsigned char*)&mag_xyz.x, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 
@@ -98,10 +119,28 @@ int main(void)
 		hex_to_ascii((unsigned char*)&mag_xyz.z, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 
-		// Heading
+		//Max mag points
+		hex_to_ascii((unsigned char*)&max_mag_xyz.x, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&max_mag_xyz.y, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		hex_to_ascii((unsigned char*)&max_mag_xyz.z, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+
+		// Dummy
+		float heading = 0;
 		hex_to_ascii((unsigned char*)&heading, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 
+/*
+		// Heading
+		float heading = MagHeading(&mag_xyz, &accel_xyz);
+
+		hex_to_ascii((unsigned char*)&heading, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+*/
 		outbuff[pos++] = 0x03;		// ETX
 
 		VCP_write(outbuff, pos);
