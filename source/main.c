@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <usbd_core.h>
 #include <usbd_cdc.h>
 #include <usbd_cdc_if_template.h>
@@ -9,8 +10,18 @@
 #include <math.h>
 #include "usbd_conf.h"
 #include "usbd_desc.h"
+#include "MadgwickAHRS.h"
+#include "FreeIMU_serial.h"
+#include "calibration.h"
+
+#define VERSION_MAJOR	1
+#define VERSION_MINOR	1
 
 #define PI			3.142857143F
+
+#define DEG2RAD(x)(x*PI/180)
+
+#define CALIBRATION_MAGIC_NO	89674523.0
 
 typedef struct
 {
@@ -21,14 +32,25 @@ typedef struct
 
 USBD_HandleTypeDef USBD_Device;
 
+static FreeIMU_Func fimu_funcs;
+static CalibVals calvals;
+
 void gyro_read(Point3df *xyz);
 void accelerometer_read(Point3df *xyz);
 void MagInit(void);
 static void MagPointRaw(Point3df *magpoint);
 static float MagHeading(Point3df *magpoint, Point3df *accpoint);
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
-
+void send_quaternion(char count);
+void send_data_raw(Point3df *gyro, Point3df *accelorometer, Point3df *magnetometer, float heading);
 static void SystemClock_Config(void);
+
+void version(void);
+void imu_raw(void);
+void imu_base_int(char count);
+void read_calibration(void);
+void write_calibration(void);
+void clear_calibration(void);
 
 int main(void)
 {
@@ -41,22 +63,43 @@ int main(void)
 
 	SystemClock_Config();
 
-	USBD_Init(&USBD_Device, &VCP_Desc, 0);
+	// Read calibration values or set defaults if not calibrated.
+	readCalibration((unsigned char*)&calvals, sizeof(CalibVals));
 
-	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
-	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
-	USBD_Start(&USBD_Device);
+	if(calvals.magic != CALIBRATION_MAGIC_NO){
+		memset(calvals.offsets, 0, sizeof(calvals.offsets));
+		memset(calvals.scales, 1.0, sizeof(calvals.scales));
+		BSP_LED_On(LED3);
+	}else{
+		BSP_LED_On(LED4);
+	}
 
 	BSP_GYRO_Init();
-	BSP_ACCELERO_Init();
+	if(BSP_ACCELERO_Init() != ACCELERO_OK)
+		BSP_LED_On(LED3);
 	MagInit();
 
 	const float tolerance = 1000.0;
 	Point3df prev_gyro_xyz;
 	memset(&prev_gyro_xyz, 0, sizeof(Point3df));
 
-	for(;;){
+	fimu_funcs.GetVersion = &version;
+	fimu_funcs.GetIMURaw = &imu_raw;
+	fimu_funcs.GetBaseValues = &imu_base_int;
+	fimu_funcs.GetQuat = &send_quaternion;
+	fimu_funcs.LoadCalibrationValues = &read_calibration;
+	fimu_funcs.Calibrate = &write_calibration;
+	fimu_funcs.ClearCalibration = &clear_calibration;
 
+	USBD_Init(&USBD_Device, &VCP_Desc, 0);
+
+	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
+	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
+	USBD_Start(&USBD_Device);
+
+	for(;;){
+		FreeIMU_serial(&fimu_funcs);
+/*
 		Point3df gyro_xyz;
 		gyro_read(&gyro_xyz);
 
@@ -66,50 +109,11 @@ int main(void)
 		Point3df mag_xyz;
 		MagPointRaw(&mag_xyz);
 
+		MadgwickAHRSupdate(gyro_xyz.x, gyro_xyz.y, gyro_xyz.z, accel_xyz.x, accel_xyz.y, accel_xyz.z, mag_xyz.x, mag_xyz.y, mag_xyz.z);
+
 		float heading = MagHeading(&mag_xyz, &accel_xyz);
 
-		char outbuff[80];
-		int pos=0;
-
-		outbuff[pos++] = 0x02;		// STX
-
-		// Gyro points
-		hex_to_ascii((unsigned char*)&gyro_xyz.x, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		hex_to_ascii((unsigned char*)&gyro_xyz.y, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		hex_to_ascii((unsigned char*)&gyro_xyz.z, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		// Accelerometer points
-		hex_to_ascii((unsigned char*)&accel_xyz.x, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		hex_to_ascii((unsigned char*)&accel_xyz.y, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		hex_to_ascii((unsigned char*)&accel_xyz.z, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		// Magnetometer points
-		hex_to_ascii((unsigned char*)&mag_xyz.x, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		hex_to_ascii((unsigned char*)&mag_xyz.y, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		hex_to_ascii((unsigned char*)&mag_xyz.z, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		// Heading
-		hex_to_ascii((unsigned char*)&heading, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-
-		outbuff[pos++] = 0x03;		// ETX
-
-		VCP_write(outbuff, pos);
+		FreeIMU_serial(&fimu_funcs);
 
 		BSP_LED_Off(LED3);
 		BSP_LED_Off(LED4);
@@ -123,9 +127,312 @@ int main(void)
 		else if(gyro_xyz.y < prev_gyro_xyz.y - tolerance)	BSP_LED_On(LED6);
 
 		memcpy(&prev_gyro_xyz, &gyro_xyz, sizeof(Point3df));
-
-		HAL_Delay(100);
+*/
 	}
+}
+
+void version(void)
+{
+	char buffer[20];
+
+	sprintf(buffer, "AHRS ver:%d.%d\r\n", VERSION_MAJOR, VERSION_MINOR);
+	VCP_write(buffer, strlen(buffer));
+}
+
+void imu_raw(void)
+{
+	char outbuff[60];
+	Point3df accel_xyz, gyro_xyz, mag_xyz;
+
+	accelerometer_read(&accel_xyz);
+	gyro_read(&gyro_xyz);
+	MagPointRaw(&mag_xyz);
+
+	sprintf(outbuff, "%d,%d,%d,%d,%d,%d,%d,%d,%d,0,0,\n",(int)accel_xyz.x, (int)accel_xyz.y, (int)accel_xyz.z,
+												(int)gyro_xyz.x, (int)gyro_xyz.y, (int)gyro_xyz.z,
+												(int)mag_xyz.x, (int)mag_xyz.y, (int)mag_xyz.z);
+
+	VCP_write(outbuff, strlen(outbuff));
+}
+
+void imu_base_int(char count)
+{
+	char outbuff[100];
+	char i;
+	Point3df accel_xyz, gyro_xyz, mag_xyz;
+	int pos=0;
+	int16_t ival;
+
+	BSP_LED_Off(LED6);
+
+	for(i=0; i<count; i++){
+		BSP_LED_Toggle(LED3);
+
+		accelerometer_read(&accel_xyz);
+		gyro_read(&gyro_xyz);
+		MagPointRaw(&mag_xyz);
+
+		pos = 0;
+		ival = (int16_t)accel_xyz.x;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)accel_xyz.y;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)accel_xyz.z;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)gyro_xyz.x;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)gyro_xyz.y;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)gyro_xyz.z;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)mag_xyz.x;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)mag_xyz.y;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		ival = (int16_t)mag_xyz.z;
+		memcpy(&outbuff[pos], &ival, sizeof(int16_t));
+		pos += sizeof(int16_t);
+
+		outbuff[pos++] = '\r';
+		outbuff[pos++] = '\n';
+
+		VCP_write(outbuff, pos);
+	}
+
+	BSP_LED_Off(LED3);
+	BSP_LED_On(LED6);
+
+}
+
+void send_quaternion(char count)
+{
+	char outbuff[60];
+	int pos=0, i;
+	int16_t ival;
+
+	BSP_LED_Off(LED6);
+
+	for(i=0; i<count; i++){
+		BSP_LED_Toggle(LED3);
+
+		Point3df gyro_xyz;
+		gyro_read(&gyro_xyz);
+
+		Point3df accel_xyz;
+		accelerometer_read(&accel_xyz);
+
+		Point3df mag_xyz;
+		MagPointRaw(&mag_xyz);
+
+		// Apply calibration values
+		accel_xyz.x = (accel_xyz.x - (float)calvals.offsets[0]) / calvals.scales[0];
+		accel_xyz.y = (accel_xyz.y - (float)calvals.offsets[1]) / calvals.scales[1];
+		accel_xyz.z = (accel_xyz.z - (float)calvals.offsets[2]) / calvals.scales[2];
+
+		mag_xyz.x = (mag_xyz.x - (float)calvals.offsets[3]) / calvals.scales[3];
+		mag_xyz.y = (mag_xyz.y - (float)calvals.offsets[4]) / calvals.scales[4];
+		mag_xyz.z = (mag_xyz.z - (float)calvals.offsets[5]) / calvals.scales[5];
+
+		MadgwickAHRSupdate(DEG2RAD(gyro_xyz.x), DEG2RAD(gyro_xyz.y), DEG2RAD(gyro_xyz.z), accel_xyz.x, accel_xyz.y, accel_xyz.z, mag_xyz.x, mag_xyz.y, mag_xyz.z);
+
+		pos = 0;
+
+		hex_to_ascii((unsigned char*)&q0, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+		outbuff[pos++] = ',';
+
+		hex_to_ascii((unsigned char*)&q1, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+		outbuff[pos++] = ',';
+
+		hex_to_ascii((unsigned char*)&q2, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+		outbuff[pos++] = ',';
+
+		hex_to_ascii((unsigned char*)&q3, &outbuff[pos], sizeof(float));
+		pos += sizeof(float)*2;
+		outbuff[pos++] = ',';
+		outbuff[pos++] = '\r';
+		outbuff[pos++] = '\n';
+
+		VCP_write(outbuff, pos);
+	}
+
+	BSP_LED_Off(LED3);
+	BSP_LED_On(LED6);
+}
+
+void send_data_raw(Point3df *gyro, Point3df *accelorometer, Point3df *magnetometer, float heading)
+{
+	char outbuff[80];
+	int pos=0;
+
+	outbuff[pos++] = 0x02;		// STX
+
+	// Gyro points
+	hex_to_ascii((unsigned char*)&gyro->x, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	hex_to_ascii((unsigned char*)&gyro->y, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	hex_to_ascii((unsigned char*)&gyro->z, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	// Accelerometer points
+	hex_to_ascii((unsigned char*)&accelorometer->x, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	hex_to_ascii((unsigned char*)&accelorometer->y, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	hex_to_ascii((unsigned char*)&accelorometer->z, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	// Magnetometer points
+	hex_to_ascii((unsigned char*)&magnetometer->x, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	hex_to_ascii((unsigned char*)&magnetometer->y, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	hex_to_ascii((unsigned char*)&magnetometer->z, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	// Heading
+	hex_to_ascii((unsigned char*)&heading, &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+
+	outbuff[pos++] = 0x03;		// ETX
+
+	VCP_write(outbuff, pos);
+}
+
+void read_calibration(void)
+{
+	char outbuff[100];
+	int pos=0;
+
+	readCalibration((unsigned char*)&calvals, sizeof(CalibVals));
+/*
+	if(calvals.magic != CALIBRATION_MAGIC_NO){
+		memset(&calvals, 0, sizeof(CalibVals));
+	}
+*/
+	// Accelerometer offsets
+	memcpy(outbuff, "acc offset: ", 12);
+	pos+=12;
+	hex_to_ascii((unsigned char*)&calvals.offsets[0], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.offsets[1], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.offsets[2], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = '\n';
+	VCP_write(outbuff, pos);
+
+	// Magnetomer offsets
+	pos=0;
+	memcpy(outbuff, "mag offset: ", 12);
+	pos+=12;
+	hex_to_ascii((unsigned char*)&calvals.offsets[3], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.offsets[4], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.offsets[5], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = '\n';
+	VCP_write(outbuff, pos);
+
+	// Accelerometer scale
+	pos=0;
+	memcpy(outbuff, "acc scale: ", 11);
+	pos+=11;
+	hex_to_ascii((unsigned char*)&calvals.scales[0], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.scales[1], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.scales[2], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = '\n';
+	VCP_write(outbuff, pos);
+
+	//Magnetometer scale
+	pos=0;
+	memcpy(outbuff, "mag scale: ", 11);
+	pos+=11;
+	hex_to_ascii((unsigned char*)&calvals.scales[3], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.scales[4], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calvals.scales[5], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = '\n';
+	VCP_write(outbuff, pos);
+}
+//f4fe60014e01ddffc2ffb000
+//126a7546b05480464dbe8346bc976d433d1776432fb34a43
+
+void write_calibration(void)
+{
+
+	unsigned char inbuff[36];
+	int len=0;
+
+	memset(inbuff, 0, sizeof(inbuff));
+	memset(&calvals, 0, sizeof(CalibVals));
+
+	while(len < sizeof(inbuff)){
+		int iret = VCP_read((unsigned char*)&inbuff[len], sizeof(inbuff)-len);
+
+		if(iret > 0)
+			len += iret;
+	}
+
+	calvals.magic = CALIBRATION_MAGIC_NO;
+	memcpy((unsigned char*)calvals.offsets, inbuff, 12);
+	memcpy((unsigned char*)calvals.scales, &inbuff[12], 24);
+
+	writeCalibration((unsigned char*)&calvals, sizeof(CalibVals));
+
+/*
+	memcpy((unsigned char*)calvals.offsets, "\xf4\xfe\x60\x01\x4e\x01\xdd\xff\xc2\xff\xb0\x00", 12);
+	memcpy((unsigned char*)calvals.scales, "\x12\x6a\x75\x46\xb0\x54\x80\x46\x4d\xbe\x83\x46\xbc\x97\x6d\x43\x3d\x17\x76\x43\x2f\xb3\x4a\x43", 24);
+	calvals.magic = CALIBRATION_MAGIC_NO;
+	writeCalibration((unsigned char*)&calvals, sizeof(CalibVals));
+*/
+}
+
+void clear_calibration(void)
+{
+return;
+	CalibVals calvals;
+	memset(&calvals, 0, sizeof(CalibVals));
+	writeCalibration((unsigned char*)&calvals, sizeof(CalibVals));
 }
 
 void gyro_read(Point3df *xyz)
@@ -165,9 +472,12 @@ static void MagPointRaw(Point3df *magpoint)
 	int16_t mag_xyz[3];
 	uint8_t tmpbuffer[6] ={0};
 
+	while((LSM303DLHC_MagGetDataStatus() & 1) != 1);
+
 	for(int i=0; i<6; i++)
 		tmpbuffer[i] = COMPASSACCELERO_IO_Read(MAG_I2C_ADDRESS, LSM303DLHC_OUT_X_H_M+i);
 
+	// NOTE: z comes before y
 	mag_xyz[0] = (int16_t)((tmpbuffer[0] << 8) + tmpbuffer[1]);	// Mx
 	mag_xyz[1] = (int16_t)((tmpbuffer[4] << 8) + tmpbuffer[5]);	// My
 	mag_xyz[2] = (int16_t)((tmpbuffer[2] << 8) + tmpbuffer[3]);	// Mz
