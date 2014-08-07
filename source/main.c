@@ -352,11 +352,7 @@ void read_calibration(void)
 	int pos=0;
 
 	readCalibration((unsigned char*)&calvals, sizeof(CalibVals));
-/*
-	if(calvals.magic != CALIBRATION_MAGIC_NO){
-		memset(&calvals, 0, sizeof(CalibVals));
-	}
-*/
+
 	// Accelerometer offsets
 	memcpy(outbuff, "acc offset: ", 12);
 	pos+=12;
@@ -416,8 +412,6 @@ void read_calibration(void)
 	outbuff[pos++] = '\n';
 	VCP_write(outbuff, pos);
 }
-//f4fe60014e01ddffc2ffb000
-//126a7546b05480464dbe8346bc976d433d1776432fb34a43
 
 void write_calibration(void)
 {
@@ -440,18 +434,10 @@ void write_calibration(void)
 	memcpy((unsigned char*)calvals.scales, &inbuff[12], 24);
 
 	writeCalibration((unsigned char*)&calvals, sizeof(CalibVals));
-
-/*
-	memcpy((unsigned char*)calvals.offsets, "\xf4\xfe\x60\x01\x4e\x01\xdd\xff\xc2\xff\xb0\x00", 12);
-	memcpy((unsigned char*)calvals.scales, "\x12\x6a\x75\x46\xb0\x54\x80\x46\x4d\xbe\x83\x46\xbc\x97\x6d\x43\x3d\x17\x76\x43\x2f\xb3\x4a\x43", 24);
-	calvals.magic = CALIBRATION_MAGIC_NO;
-	writeCalibration((unsigned char*)&calvals, sizeof(CalibVals));
-*/
 }
 
 void clear_calibration(void)
 {
-return;
 	CalibVals calvals;
 	memset(&calvals, 0, sizeof(CalibVals));
 	writeCalibration((unsigned char*)&calvals, sizeof(CalibVals));
