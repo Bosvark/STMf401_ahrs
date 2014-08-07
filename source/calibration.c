@@ -13,8 +13,6 @@
 #define FLASH_USER_START_ADDR   ADDR_FLASH_SECTOR_5   // Start @ of user Flash area
 #define FLASH_USER_END_ADDR		FLASH_END_ADDR
 
-static uint32_t GetSector(uint32_t Address);
-
 int writeCalibration(unsigned char *data, unsigned int len)
 {
 	FLASH_EraseInitTypeDef EraseInitStruct;
@@ -70,35 +68,3 @@ int readCalibration(unsigned char *data, unsigned int len)
 //
 // Local functions
 //
-static uint32_t GetSector(uint32_t Address)
-{
-  uint32_t sector = 0;
-
-  if((Address < ADDR_FLASH_SECTOR_1) && (Address >= ADDR_FLASH_SECTOR_0))
-  {
-    sector = FLASH_SECTOR_0;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_2) && (Address >= ADDR_FLASH_SECTOR_1))
-  {
-    sector = FLASH_SECTOR_1;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_3) && (Address >= ADDR_FLASH_SECTOR_2))
-  {
-    sector = FLASH_SECTOR_2;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_4) && (Address >= ADDR_FLASH_SECTOR_3))
-  {
-    sector = FLASH_SECTOR_3;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_5) && (Address >= ADDR_FLASH_SECTOR_4))
-  {
-    sector = FLASH_SECTOR_4;
-  }
-   else if((Address < FLASH_END_ADDR) && (Address >= ADDR_FLASH_SECTOR_5))
-  {
-    sector = FLASH_SECTOR_5;
-  }
-
-  return sector;
-}
-
