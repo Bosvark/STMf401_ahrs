@@ -14,12 +14,14 @@
 #include "FreeIMU_serial.h"
 #include "calibration.h"
 
+#define SWAP_AXIS
+
 #define VERSION_MAJOR	1
 #define VERSION_MINOR	1
 
 #define PI			3.142857143F
 
-#define DEG2RAD(x)(x*PI/180)
+#define DEG2RAD(x)((x*PI)/180)
 
 #define CALIBRATION_MAGIC_NO	89674523.0
 
@@ -30,16 +32,25 @@ typedef struct
 	float z;
 }Point3df;
 
+typedef struct
+{
+	float dt_x;
+	float dt_y;
+	float dt_z;
+}Dt3df;
+
 USBD_HandleTypeDef USBD_Device;
 
 static FreeIMU_Func fimu_funcs;
 static CalibVals calvals;
+static Dt3df compl_filter;
+float previous_time=0;
 
 void gyro_read(Point3df *xyz);
 void accelerometer_read(Point3df *xyz);
 void MagInit(void);
 static void MagPointRaw(Point3df *magpoint);
-static float MagHeading(Point3df *magpoint, Point3df *accpoint);
+//static float MagHeading(Point3df *magpoint, Point3df *accpoint);
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
 void send_quaternion(char count);
 void send_data_raw(Point3df *gyro, Point3df *accelorometer, Point3df *magnetometer, float heading);
@@ -79,9 +90,10 @@ int main(void)
 		BSP_LED_On(LED3);
 	MagInit();
 
-	const float tolerance = 1000.0;
 	Point3df prev_gyro_xyz;
 	memset(&prev_gyro_xyz, 0, sizeof(Point3df));
+
+	memset(&compl_filter, 0, sizeof(Dt3df));
 
 	fimu_funcs.GetVersion = &version;
 	fimu_funcs.GetIMURaw = &imu_raw;
@@ -224,7 +236,6 @@ void send_quaternion(char count)
 {
 	char outbuff[60];
 	int pos=0, i;
-	int16_t ival;
 
 	BSP_LED_Off(LED6);
 
@@ -248,6 +259,17 @@ void send_quaternion(char count)
 		mag_xyz.x = (mag_xyz.x - (float)calvals.offsets[3]) / calvals.scales[3];
 		mag_xyz.y = (mag_xyz.y - (float)calvals.offsets[4]) / calvals.scales[4];
 		mag_xyz.z = (mag_xyz.z - (float)calvals.offsets[5]) / calvals.scales[5];
+
+		// Adjust the gyro readings with a complimentary filter
+		// angle = 0.98 *(angle+gyro*dt) + 0.02*acc
+		if(previous_time > 0){
+			float dt = ((float)HAL_GetTick() - previous_time)/1000000;
+			gyro_xyz.x = 0.98 *(gyro_xyz.x+gyro_xyz.x*dt) + 0.02*accel_xyz.x;
+			gyro_xyz.y = 0.98 *(gyro_xyz.y+gyro_xyz.y*dt) + 0.02*accel_xyz.y;
+			gyro_xyz.z = 0.98 *(gyro_xyz.z+gyro_xyz.z*dt) + 0.02*accel_xyz.z;
+		}
+
+		previous_time = (float)HAL_GetTick();
 
 		MadgwickAHRSupdate(DEG2RAD(gyro_xyz.x), DEG2RAD(gyro_xyz.y), DEG2RAD(gyro_xyz.z), accel_xyz.x, accel_xyz.y, accel_xyz.z, mag_xyz.x, mag_xyz.y, mag_xyz.z);
 
@@ -455,6 +477,13 @@ void accelerometer_read(Point3df *xyz)
 	xyz->x = (float)accel_xyz[0];
 	xyz->y = (float)accel_xyz[1];
 	xyz->z = (float)accel_xyz[2];
+
+#ifdef SWAP_AXIS
+	xyz->x = xyz->x * -1.0f;
+	xyz->y = xyz->y * -1.0f;
+	xyz->z = xyz->z * -1.0f;
+#endif // SWAP_AXIS
+
 }
 
 void MagInit(void)
@@ -485,11 +514,18 @@ static void MagPointRaw(Point3df *magpoint)
 	magpoint->x = (float)mag_xyz[0];
 	magpoint->y = (float)mag_xyz[1];
 	magpoint->z = (float)mag_xyz[2];
+
+#ifdef SWAP_AXIS
+	magpoint->x = magpoint->x * -1.0f;
+	magpoint->y = magpoint->y * -1.0f;
+	magpoint->z = magpoint->z * -1.0f;
+#endif // SWAP_AXIS
 }
 
 // Calibration values
 // Min X: -254.00 Min Y: -357.00 Min Z: -222.00
 // Max X:  267.00 Max Y:  204.00 Max Z:  235.00
+/*
 static float MagHeading(Point3df *magpoint, Point3df *accpoint)
 {
 	float Mag_minx = -254;
@@ -524,7 +560,7 @@ static float MagHeading(Point3df *magpoint, Point3df *accpoint)
 
 	return heading;
 }
-
+*/
 const char    hexlookup[] = {"0123456789ABCDEF"};
 
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length)
