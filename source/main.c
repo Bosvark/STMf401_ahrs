@@ -14,7 +14,7 @@
 #include "FreeIMU_serial.h"
 #include "calibration.h"
 
-#define SWAP_AXIS
+//#define SWAP_AXIS
 
 #define VERSION_MAJOR	1
 #define VERSION_MINOR	1
@@ -24,6 +24,9 @@
 #define DEG2RAD(x)((x*PI)/180)
 
 #define CALIBRATION_MAGIC_NO	89674523.0
+
+static float gyro_offs_xyz[3];
+#define GYRO_ZERO_SAMPLES	10000
 
 typedef struct
 {
@@ -43,10 +46,10 @@ USBD_HandleTypeDef USBD_Device;
 
 static FreeIMU_Func fimu_funcs;
 static CalibVals calvals;
-static Dt3df compl_filter;
 float previous_time=0;
 
 void gyro_read(Point3df *xyz);
+void zero_gyro(void);
 void accelerometer_read(Point3df *xyz);
 void MagInit(void);
 static void MagPointRaw(Point3df *magpoint);
@@ -92,8 +95,7 @@ int main(void)
 
 	Point3df prev_gyro_xyz;
 	memset(&prev_gyro_xyz, 0, sizeof(Point3df));
-
-	memset(&compl_filter, 0, sizeof(Dt3df));
+	memset(&gyro_offs_xyz, 0, sizeof(gyro_offs_xyz));
 
 	fimu_funcs.GetVersion = &version;
 	fimu_funcs.GetIMURaw = &imu_raw;
@@ -108,6 +110,10 @@ int main(void)
 	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
 	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
 	USBD_Start(&USBD_Device);
+
+	BSP_LED_On(LED6);
+	zero_gyro();
+	BSP_LED_Off(LED6);
 
 	for(;;){
 		FreeIMU_serial(&fimu_funcs);
@@ -234,6 +240,9 @@ void imu_base_int(char count)
 
 void send_quaternion(char count)
 {
+	Point3df gyro_xyz;
+	Point3df accel_xyz;
+	Point3df mag_xyz;
 	char outbuff[60];
 	int pos=0, i;
 
@@ -242,13 +251,8 @@ void send_quaternion(char count)
 	for(i=0; i<count; i++){
 		BSP_LED_Toggle(LED3);
 
-		Point3df gyro_xyz;
 		gyro_read(&gyro_xyz);
-
-		Point3df accel_xyz;
 		accelerometer_read(&accel_xyz);
-
-		Point3df mag_xyz;
 		MagPointRaw(&mag_xyz);
 
 		// Apply calibration values
@@ -259,15 +263,6 @@ void send_quaternion(char count)
 		mag_xyz.x = (mag_xyz.x - (float)calvals.offsets[3]) / calvals.scales[3];
 		mag_xyz.y = (mag_xyz.y - (float)calvals.offsets[4]) / calvals.scales[4];
 		mag_xyz.z = (mag_xyz.z - (float)calvals.offsets[5]) / calvals.scales[5];
-
-		// Adjust the gyro readings with a complimentary filter
-		// angle = 0.98 *(angle+gyro*dt) + 0.02*acc
-		if(previous_time > 0){
-			float dt = ((float)HAL_GetTick() - previous_time)/1000000;
-			gyro_xyz.x = 0.98 *(gyro_xyz.x+gyro_xyz.x*dt) + 0.02*accel_xyz.x;
-			gyro_xyz.y = 0.98 *(gyro_xyz.y+gyro_xyz.y*dt) + 0.02*accel_xyz.y;
-			gyro_xyz.z = 0.98 *(gyro_xyz.z+gyro_xyz.z*dt) + 0.02*accel_xyz.z;
-		}
 
 		previous_time = (float)HAL_GetTick();
 
@@ -449,9 +444,27 @@ void gyro_read(Point3df *xyz)
 
 	BSP_GYRO_GetXYZ(gyro_xyz);
 
-	xyz->x = gyro_xyz[0];
-	xyz->y = gyro_xyz[1];
-	xyz->z = gyro_xyz[2];
+	xyz->x = gyro_xyz[0] - gyro_offs_xyz[0];
+	xyz->y = gyro_xyz[1] - gyro_offs_xyz[1];
+	xyz->z = gyro_xyz[2] - gyro_offs_xyz[2];
+}
+
+void zero_gyro(void)
+{
+	float gyro_xyz[3];
+	int i;
+
+	for(i=0; i<GYRO_ZERO_SAMPLES; i++){
+		BSP_GYRO_GetXYZ(gyro_xyz);
+
+		gyro_offs_xyz[0] += gyro_xyz[0];
+		gyro_offs_xyz[1] += gyro_xyz[1];
+		gyro_offs_xyz[2] += gyro_xyz[2];
+	}
+
+	gyro_offs_xyz[0] = gyro_offs_xyz[0]/(float)GYRO_ZERO_SAMPLES;
+	gyro_offs_xyz[1] = gyro_offs_xyz[1]/(float)GYRO_ZERO_SAMPLES;
+	gyro_offs_xyz[2] = gyro_offs_xyz[2]/(float)GYRO_ZERO_SAMPLES;
 }
 
 void accelerometer_read(Point3df *xyz)
