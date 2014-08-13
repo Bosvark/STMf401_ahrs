@@ -7,6 +7,7 @@ typedef struct
 	void (*GetIMURaw)(void);
 	void (*GetBaseValues)(char count);
 	void (*GetQuat)(char count);
+	void (*GetAttitude)(char count);
 	void (*LoadCalibrationValues)(void);
 	void (*ClearCalibration)(void);
 	void (*Calibrate)(void);
