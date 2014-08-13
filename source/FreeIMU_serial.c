@@ -19,6 +19,17 @@ int FreeIMU_serial(FreeIMU_Func *funcs)
 			if(funcs->GetIMURaw != NULL)
 				funcs->GetIMURaw();
 			break;
+		case 'a':
+		{
+			char count=0;
+
+			while(VCP_read(&count, 1) <= 0) HAL_Delay(1);
+
+			if(funcs->GetAttitude != NULL)
+				funcs->GetAttitude(count);
+
+			break;
+		}
 		case 'b':
 		{
 			char count=0;
