@@ -26,7 +26,10 @@
 #define CALIBRATION_MAGIC_NO	89674523.0
 
 static float gyro_offs_xyz[3];
-#define GYRO_ZERO_SAMPLES	10000
+static float gyro_noise_xyz[3];
+
+#define GYRO_ZERO_SAMPLES	10000.0
+#define MAG_ZERO_SAMPLES	10000.0
 
 typedef struct
 {
@@ -44,16 +47,21 @@ typedef struct
 
 USBD_HandleTypeDef USBD_Device;
 
+static Point3df mag_offs_min;
+static Point3df mag_offs_max;
+static Point3df mag_offs;
+
 static FreeIMU_Func fimu_funcs;
 static CalibVals calvals;
 float previous_time=0;
 
 void gyro_read(Point3df *xyz);
+void zero_mag(void);
 void zero_gyro(void);
 void accelerometer_read(Point3df *xyz);
 void MagInit(void);
-static void MagPointRaw(Point3df *magpoint);
-//static float MagHeading(Point3df *magpoint, Point3df *accpoint);
+void MagPointRaw(Point3df *magpoint);
+float MagHeading(Point3df *magpoint, Point3df *accpoint);
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
 void send_quaternion(char count);
 void send_yaw_pitch_roll(char count);
@@ -115,39 +123,11 @@ int main(void)
 
 	BSP_LED_On(LED6);
 	zero_gyro();
+	zero_mag();
 	BSP_LED_Off(LED6);
 
 	for(;;){
 		FreeIMU_serial(&fimu_funcs);
-/*
-		Point3df gyro_xyz;
-		gyro_read(&gyro_xyz);
-
-		Point3df accel_xyz;
-		accelerometer_read(&accel_xyz);
-
-		Point3df mag_xyz;
-		MagPointRaw(&mag_xyz);
-
-		MadgwickAHRSupdate(gyro_xyz.x, gyro_xyz.y, gyro_xyz.z, accel_xyz.x, accel_xyz.y, accel_xyz.z, mag_xyz.x, mag_xyz.y, mag_xyz.z);
-
-		float heading = MagHeading(&mag_xyz, &accel_xyz);
-
-		FreeIMU_serial(&fimu_funcs);
-
-		BSP_LED_Off(LED3);
-		BSP_LED_Off(LED4);
-		BSP_LED_Off(LED5);
-		BSP_LED_Off(LED6);
-
-		if(gyro_xyz.x > prev_gyro_xyz.x + tolerance) 	BSP_LED_On(LED4);
-		else if(gyro_xyz.x < prev_gyro_xyz.x - tolerance)	BSP_LED_On(LED5);
-
-		if(gyro_xyz.y > prev_gyro_xyz.y + tolerance) 	BSP_LED_On(LED3);
-		else if(gyro_xyz.y < prev_gyro_xyz.y - tolerance)	BSP_LED_On(LED6);
-
-		memcpy(&prev_gyro_xyz, &gyro_xyz, sizeof(Point3df));
-*/
 	}
 }
 
@@ -168,9 +148,9 @@ void imu_raw(void)
 	gyro_read(&gyro_xyz);
 	MagPointRaw(&mag_xyz);
 
-	sprintf(outbuff, "%d,%d,%d,%d,%d,%d,%d,%d,%d,0,0,\n",(int)accel_xyz.x, (int)accel_xyz.y, (int)accel_xyz.z,
+	sprintf(outbuff, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,0,\n",(int)accel_xyz.x, (int)accel_xyz.y, (int)accel_xyz.z,
 												(int)gyro_xyz.x, (int)gyro_xyz.y, (int)gyro_xyz.z,
-												(int)mag_xyz.x, (int)mag_xyz.y, (int)mag_xyz.z);
+												(int)mag_xyz.x, (int)mag_xyz.y, (int)mag_xyz.z, (int)HAL_GetTick());
 
 	VCP_write(outbuff, strlen(outbuff));
 }
@@ -247,6 +227,7 @@ void send_quaternion(char count)
 	Point3df mag_xyz;
 	char outbuff[60];
 	int pos=0, i;
+	const float gyroSensitivity = (500.0f * 2.0f)/65535; //0.0175f;
 
 	BSP_LED_Off(LED6);
 
@@ -257,16 +238,9 @@ void send_quaternion(char count)
 		accelerometer_read(&accel_xyz);
 		MagPointRaw(&mag_xyz);
 
-		// Apply calibration values
-		accel_xyz.x = (accel_xyz.x - (float)calvals.offsets[0]) / calvals.scales[0];
-		accel_xyz.y = (accel_xyz.y - (float)calvals.offsets[1]) / calvals.scales[1];
-		accel_xyz.z = (accel_xyz.z - (float)calvals.offsets[2]) / calvals.scales[2];
-
-		mag_xyz.x = (mag_xyz.x - (float)calvals.offsets[3]) / calvals.scales[3];
-		mag_xyz.y = (mag_xyz.y - (float)calvals.offsets[4]) / calvals.scales[4];
-		mag_xyz.z = (mag_xyz.z - (float)calvals.offsets[5]) / calvals.scales[5];
-
-		previous_time = (float)HAL_GetTick();
+		gyro_xyz.x = ((gyro_xyz.x - gyro_offs_xyz[0]) * gyroSensitivity);
+		gyro_xyz.y = ((gyro_xyz.y - gyro_offs_xyz[1]) * gyroSensitivity);
+		gyro_xyz.z = ((gyro_xyz.z - gyro_offs_xyz[2]) * gyroSensitivity);
 
 		MadgwickAHRSupdate(DEG2RAD(gyro_xyz.x), DEG2RAD(gyro_xyz.y), DEG2RAD(gyro_xyz.z), accel_xyz.x, accel_xyz.y, accel_xyz.z, mag_xyz.x, mag_xyz.y, mag_xyz.z);
 
@@ -307,6 +281,8 @@ void send_yaw_pitch_roll(char count)
 	Point3df mag_xyz;
 	char outbuff[60];
 	int pos=0, i;
+	const float gyroScale = 0.001, accScale = 16348.0, alpha = 0.98;
+	float acc_pitch, gyro_pitch, comp_pitch, acc_roll, gyro_roll, comp_roll, comp_yaw=0, dt;
 
 	if(filter_init == 0){
 		memset(&gyro_xyz_filtered, 0, sizeof(Point3df));
@@ -322,67 +298,42 @@ void send_yaw_pitch_roll(char count)
 		accelerometer_read(&accel_xyz);
 		MagPointRaw(&mag_xyz);
 
-		// Apply calibration values
-		accel_xyz.x = (accel_xyz.x - (float)calvals.offsets[0]) / calvals.scales[0];
-		accel_xyz.y = (accel_xyz.y - (float)calvals.offsets[1]) / calvals.scales[1];
-		accel_xyz.z = (accel_xyz.z - (float)calvals.offsets[2]) / calvals.scales[2];
+		gyro_xyz.x = ((gyro_xyz.x - gyro_offs_xyz[0]) * gyroScale);
+		gyro_xyz.y = ((gyro_xyz.y - gyro_offs_xyz[1]) * gyroScale);
+		gyro_xyz.z = ((gyro_xyz.z - gyro_offs_xyz[2]) * gyroScale);
 
-		mag_xyz.x = (mag_xyz.x - (float)calvals.offsets[3]) / calvals.scales[3];
-		mag_xyz.y = (mag_xyz.y - (float)calvals.offsets[4]) / calvals.scales[4];
-		mag_xyz.z = (mag_xyz.z - (float)calvals.offsets[5]) / calvals.scales[5];
+		accel_xyz.x = accel_xyz.x / accScale;
+		accel_xyz.y = accel_xyz.y / accScale;
+		accel_xyz.z = accel_xyz.z / accScale;
 
-		// Normalize acceleration measurements so they range from 0 to 1
-		float accxnorm = accel_xyz.x/sqrtf(accel_xyz.x*accel_xyz.x+accel_xyz.y*accel_xyz.y+accel_xyz.z*accel_xyz.z);
-		float accynorm = accel_xyz.y/sqrtf(accel_xyz.x*accel_xyz.x+accel_xyz.y*accel_xyz.y+accel_xyz.z*accel_xyz.z);
+		float current_time = (float)HAL_GetTick()/1000000;
+		dt = current_time - previous_time;
 
-		// calculate pitch and roll
-		float Pitch = asinf(-accxnorm);
-		float Roll = asinf(accynorm/cosf(Pitch));
+		acc_pitch = atanf((accel_xyz.x / sqrtf(powf(accel_xyz.y, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
+		gyro_pitch += gyro_xyz.x * dt;
 
-		// tilt compensated magnetic sensor measurements
-		float magxcomp = mag_xyz.x*cosf(Pitch)+mag_xyz.z*sinf(Pitch);
-		float magycomp = mag_xyz.x*sinf(Roll)*sinf(Pitch)+mag_xyz.y*cosf(Roll)-mag_xyz.z*sinf(Roll)*cosf(Pitch);
+		acc_roll = atanf((accel_xyz.y / sqrtf(powf(accel_xyz.x, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
+		gyro_roll -= gyro_xyz.y * dt;
 
-		// arctangent of y/x converted to degrees
-		float heading = (float)(180*atan2f(magycomp,magxcomp)/PI);
+		// angle = (0.98)*(angle + gyro*dt) + (0.02)*(x_acc);
+		comp_pitch = alpha * (comp_pitch + gyro_pitch * dt) + (1.0 - alpha) * acc_pitch;
+		comp_roll = alpha * (comp_roll + gyro_roll * dt) + (1.0 - alpha) * acc_roll;
 
-		if(heading < 0)
-			heading +=360;
+		comp_yaw = MagHeading(&mag_xyz, &accel_xyz);
 
+		previous_time = current_time;
 
-		previous_time = (float)HAL_GetTick();
-/*
-		float tau=0.075;
-		float a=0.0;
-
-		float Complementary(float newAngle, float newRate,int looptime) {
-		float dtC = float(looptime)/1000.0;
-		a=tau/(tau+dtC);
-		x_angleC= a* (x_angleC + newRate * dtC) + (1-a) * (newAngle);
-		return x_angleC;
-		}
-*/
-/*
-		// Adjust the gyro readings with a complimentary filter
-		// angle = 0.98 *(angle+gyro*dt) + 0.02*acc
-		if(previous_time > 0){
-			float dt = ((float)HAL_GetTick() - previous_time)/1000000;
-			gyro_xyz.x = 0.98 *(gyro_xyz.x+gyro_xyz.x*dt) + 0.02*accel_xyz.x;
-			gyro_xyz.y = 0.98 *(gyro_xyz.y+gyro_xyz.y*dt) + 0.02*accel_xyz.y;
-			gyro_xyz.z = 0.98 *(gyro_xyz.z+gyro_xyz.z*dt) + 0.02*accel_xyz.z;
-		}
-*/
 		pos = 0;
 
-		hex_to_ascii((unsigned char*)&heading, &outbuff[pos], sizeof(float));
+		hex_to_ascii((unsigned char*)&comp_yaw, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 		outbuff[pos++] = ',';
 
-		hex_to_ascii((unsigned char*)&Pitch, &outbuff[pos], sizeof(float));
+		hex_to_ascii((unsigned char*)&comp_pitch, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 		outbuff[pos++] = ',';
 
-		hex_to_ascii((unsigned char*)&Roll, &outbuff[pos], sizeof(float));
+		hex_to_ascii((unsigned char*)&comp_roll, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 		outbuff[pos++] = ',';
 		outbuff[pos++] = '\r';
@@ -544,10 +495,29 @@ void gyro_read(Point3df *xyz)
 
 	BSP_GYRO_GetXYZ(gyro_xyz);
 
-	xyz->x = gyro_xyz[0] - gyro_offs_xyz[0];
-	xyz->y = gyro_xyz[1] - gyro_offs_xyz[1];
-	xyz->z = gyro_xyz[2] - gyro_offs_xyz[2];
+	xyz->x = gyro_xyz[0];// - gyro_offs_xyz[0];
+	xyz->y = gyro_xyz[1];// - gyro_offs_xyz[1];
+	xyz->z = gyro_xyz[2];// - gyro_offs_xyz[2];
+
 }
+
+float calc_noise(float current_level, float value)
+{
+    float noise = 0.0f;
+
+    if(value > current_level){
+        noise = value;
+        return noise;
+    }
+
+    if(value < -current_level){
+        noise = -value;
+        return noise;
+    }
+
+    return current_level;
+}
+
 
 void zero_gyro(void)
 {
@@ -562,9 +532,17 @@ void zero_gyro(void)
 		gyro_offs_xyz[2] += gyro_xyz[2];
 	}
 
-	gyro_offs_xyz[0] = gyro_offs_xyz[0]/(float)GYRO_ZERO_SAMPLES;
-	gyro_offs_xyz[1] = gyro_offs_xyz[1]/(float)GYRO_ZERO_SAMPLES;
-	gyro_offs_xyz[2] = gyro_offs_xyz[2]/(float)GYRO_ZERO_SAMPLES;
+	gyro_offs_xyz[0] = gyro_offs_xyz[0] / GYRO_ZERO_SAMPLES;
+	gyro_offs_xyz[1] = gyro_offs_xyz[1] / GYRO_ZERO_SAMPLES;
+	gyro_offs_xyz[2] = gyro_offs_xyz[2] / GYRO_ZERO_SAMPLES;
+
+	for(i=0; i<GYRO_ZERO_SAMPLES; i++){
+		BSP_GYRO_GetXYZ(gyro_xyz);
+
+		gyro_noise_xyz[0] = calc_noise(gyro_noise_xyz[0], gyro_xyz[0]-gyro_offs_xyz[0]);
+		gyro_noise_xyz[1] = calc_noise(gyro_noise_xyz[1], gyro_xyz[1]-gyro_offs_xyz[1]);
+		gyro_noise_xyz[2] = calc_noise(gyro_noise_xyz[2], gyro_xyz[2]-gyro_offs_xyz[2]);
+	}
 }
 
 void accelerometer_read(Point3df *xyz)
@@ -595,7 +573,45 @@ void MagInit(void)
 	LSM303DLHC_MagInit(&LSM303DLHC_InitStruct);
 }
 
-static void MagPointRaw(Point3df *magpoint)
+void zero_mag(void)
+{
+#if 0
+	Point3df magpoint;
+	int i;
+
+	memset(&mag_offs_min, 0, sizeof(Point3df));
+	memset(&mag_offs_max, 0, sizeof(Point3df));
+
+	for(i=0; i<MAG_ZERO_SAMPLES; i++){
+		MagPointRaw(&magpoint);
+
+		if(magpoint.x > mag_offs_max.x) mag_offs_max.x = magpoint.x;
+		if(magpoint.y > mag_offs_max.y) mag_offs_max.y = magpoint.y;
+		if(magpoint.z > mag_offs_max.z) mag_offs_max.z = magpoint.z;
+
+		if(magpoint.x <= mag_offs_min.x) mag_offs_min.x = magpoint.x;
+		if(magpoint.y <= mag_offs_min.y) mag_offs_min.y = magpoint.y;
+		if(magpoint.z <= mag_offs_min.z) mag_offs_min.z = magpoint.z;
+
+		mag_offs.x += magpoint.x;
+		mag_offs.y += magpoint.y;
+		mag_offs.z += magpoint.z;
+	}
+
+	mag_offs.x = mag_offs.x / MAG_ZERO_SAMPLES;
+	mag_offs.y = mag_offs.y / MAG_ZERO_SAMPLES;
+	mag_offs.z = mag_offs.z / MAG_ZERO_SAMPLES;
+#endif
+
+mag_offs_min.x = -254;
+mag_offs_min.y = -357;
+mag_offs_min.z = -222;
+mag_offs_max.x = 267;
+mag_offs_max.y = 204;
+mag_offs_max.z = 235;
+}
+
+void MagPointRaw(Point3df *magpoint)
 {
 	int16_t mag_xyz[3];
 	uint8_t tmpbuffer[6] ={0};
@@ -624,20 +640,13 @@ static void MagPointRaw(Point3df *magpoint)
 // Calibration values
 // Min X: -254.00 Min Y: -357.00 Min Z: -222.00
 // Max X:  267.00 Max Y:  204.00 Max Z:  235.00
-/*
-static float MagHeading(Point3df *magpoint, Point3df *accpoint)
-{
-	float Mag_minx = -254;
-	float Mag_miny = -357;
-	float Mag_minz = -222;
-	float Mag_maxx = 267;
-	float Mag_maxy = 204;
-	float Mag_maxz = 235;
 
+float MagHeading(Point3df *magpoint, Point3df *accpoint)
+{
 	// use calibration values to shift and scale magnetometer measurements
-	float Magx = (magpoint->x-Mag_minx)/(Mag_maxx-Mag_minx)*2-1;
-	float Magy = (magpoint->y-Mag_miny)/(Mag_maxy-Mag_miny)*2-1;
-	float Magz = (magpoint->z-Mag_minz)/(Mag_maxz-Mag_minz)*2-1;
+	float Magx = ((magpoint->x-mag_offs_min.x)/(mag_offs_max.x-mag_offs_min.x)*2-1);// - mag_offs.x;
+	float Magy = ((magpoint->y-mag_offs_min.y)/(mag_offs_max.y-mag_offs_min.y)*2-1);// - mag_offs.y;
+	float Magz = ((magpoint->z-mag_offs_min.z)/(mag_offs_max.z-mag_offs_min.z)*2-1);// - mag_offs.z;
 
 	// Normalize acceleration measurements so they range from 0 to 1
 	float accxnorm = accpoint->x/sqrtf(accpoint->x*accpoint->x+accpoint->y*accpoint->y+accpoint->z*accpoint->z);
@@ -659,7 +668,7 @@ static float MagHeading(Point3df *magpoint, Point3df *accpoint)
 
 	return heading;
 }
-*/
+
 const char    hexlookup[] = {"0123456789ABCDEF"};
 
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length)
