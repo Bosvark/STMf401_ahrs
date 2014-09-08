@@ -256,6 +256,10 @@ void send_quaternion(char count)
 static Point3df gyro_xyz_filtered;
 static char filter_init=0;
 
+static float comp_pitch=0;
+static float comp_roll=0;
+static float comp_yaw=0;
+
 void send_yaw_pitch_roll(char count)
 {
 	Point3df gyro_xyz;
@@ -264,7 +268,7 @@ void send_yaw_pitch_roll(char count)
 	char outbuff[60];
 	int pos=0, i;
 	const float gyroScale = 0.001, accScale = 16348.0, alpha = 0.98;
-	float acc_pitch, gyro_pitch, comp_pitch, acc_roll, gyro_roll, comp_roll, comp_yaw=0, dt;
+	float acc_pitch, gyro_pitch, error_angle, acc_roll, gyro_roll, dt;
 
 	if(filter_init == 0){
 		memset(&gyro_xyz_filtered, 0, sizeof(Point3df));
@@ -296,10 +300,20 @@ void send_yaw_pitch_roll(char count)
 
 		acc_roll = atanf((accel_xyz.y / sqrtf(powf(accel_xyz.x, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
 		gyro_roll -= gyro_xyz.y * dt;
-
+/*
+		// Complementary Filter Implementation #1:
 		// angle = (0.98)*(angle + gyro*dt) + (0.02)*(x_acc);
 		comp_pitch = alpha * (comp_pitch + gyro_pitch * dt) + (1.0 - alpha) * acc_pitch;
 		comp_roll = alpha * (comp_roll + gyro_roll * dt) + (1.0 - alpha) * acc_roll;
+*/
+		// Complementary Filter Implementation #3:
+		comp_pitch = comp_pitch + gyro_pitch*dt;
+		error_angle = acc_pitch - comp_pitch;
+		comp_pitch = comp_pitch + (1-alpha)*error_angle;
+
+		comp_roll = comp_roll + gyro_roll*dt;
+		error_angle = acc_roll - comp_roll;
+		comp_roll = comp_roll + (1-alpha)*error_angle;
 
 		comp_yaw = MagHeading(&mag_xyz, &accel_xyz);
 
