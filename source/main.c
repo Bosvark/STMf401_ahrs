@@ -12,6 +12,7 @@
 #include "usbd_desc.h"
 #include "MadgwickAHRS.h"
 #include "FreeIMU_serial.h"
+#include "exp_board.h"
 
 //#define SWAP_AXIS
 
@@ -80,6 +81,10 @@ int main(void)
 
 	SystemClock_Config();
 
+	ExpLedInit();
+	ExpBuzzerInit();
+	EXTILine0_Config();
+
 	BSP_LED_On(LED3);
 
 	BSP_GYRO_Init();
@@ -108,8 +113,28 @@ int main(void)
 	zero_mag();
 	BSP_LED_Off(LED6);
 
+	ExpBuzzerOff();
+/*
 	for(;;){
+
 		FreeIMU_serial(&fimu_funcs);
+	}
+*/
+/*
+	for(;;){
+		ExpLedOn(GREEN_LED);
+		HAL_Delay(500);
+		ExpLedOff(GREEN_LED);
+
+		ExpLedOn(ORANGE_LED);
+		HAL_Delay(500);
+		ExpLedOff(ORANGE_LED);
+
+		ExpLedToggle(RED_LED);
+	}
+*/
+	for(;;){
+
 	}
 }
 
