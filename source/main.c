@@ -114,6 +114,8 @@ int main(void)
 	BSP_LED_Off(LED6);
 
 	ExpBuzzerOff();
+
+	TIM_Config();
 /*
 	for(;;){
 
@@ -133,8 +135,16 @@ int main(void)
 		ExpLedToggle(RED_LED);
 	}
 */
-	for(;;){
+	PwmInfo pwm;
+	char outbuff[60];
+	int count=0;
 
+	for(;;){
+		GetPwmInfo(&pwm);
+
+		sprintf(outbuff, "%d  ->   Freq:%d     Duty Cycle:%d    IC:%d\r\n", ++count, (int)pwm.Freq, (int)pwm.dutyCycle, (int)pwm.icVal);
+		VCP_write(outbuff, strlen(outbuff));
+//		HAL_Delay(500);
 	}
 }
 
