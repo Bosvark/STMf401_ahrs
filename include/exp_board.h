@@ -34,7 +34,7 @@ void EXTILine0_Config(void);
 /* Definition for TIMx Pins */
 #define TIMx_CHANNEL_GPIO_PORT()       __GPIOB_CLK_ENABLE()
 #define GPIO_PORT                      GPIOB
-#define GPIO_PIN_CHANNEL2              GPIO_PIN_7
+#define GPIO_PIN_CHANNEL2              GPIO_PIN_7 | GPIO_PIN_9
 #define GPIO_AF_TIMx                   GPIO_AF2_TIM4
 
 /* Definition for TIMx's NVIC */
@@ -44,7 +44,8 @@ void EXTILine0_Config(void);
 typedef struct
 {
 	uint32_t icVal;
-	uint32_t dutyCycle;
+	uint32_t dutyCycle1;
+	uint32_t dutyCycle2;
 	uint32_t Freq;
 }PwmInfo;
 

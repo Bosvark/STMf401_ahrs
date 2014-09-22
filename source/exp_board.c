@@ -1,3 +1,4 @@
+#include "stm32f4xx_hal_dma.h"	// why? this is messy
 #include "stm32f4xx_hal_tim.h"
 #include "exp_board.h"
 
@@ -104,7 +105,7 @@ TIM_HandleTypeDef        TimHandle;
 /* Captured Value */
 __IO uint32_t            uwIC2Value = 0;
 /* Duty Cycle Value */
-__IO uint32_t            uwDutyCycle = 0;
+__IO uint32_t            uwDutyCycle1 = 0, uwDutyCycle2 = 0;
 /* Frequency Value */
 __IO uint32_t            uwFrequency = 0;
 
@@ -149,6 +150,16 @@ void TIM_Config(void)
 	  sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
 	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_2);
 
+	  /* Configure the Input Capture of channel 3 */
+	  sConfig.ICPolarity = TIM_ICPOLARITY_FALLING;
+	  sConfig.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_3);
+
+	  /* Configure the Input Capture of channel 4 */
+	  sConfig.ICPolarity = TIM_ICPOLARITY_RISING;
+	  sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
+	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_4);
+
 	  /*##-3- Configure the slave mode ###########################################*/
 	  /* Select the slave Mode: Reset Mode */
 	  sSlaveConfig.SlaveMode     = TIM_SLAVEMODE_RESET;
@@ -160,6 +171,9 @@ void TIM_Config(void)
 
 	  /*##-5- Start the Input Capture in interrupt mode ##########################*/
 	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_1);
+
+	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_4);
+	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_3);
 }
 
 void TIMx_IRQHandler(void)
@@ -179,7 +193,7 @@ ExpLedToggle(ORANGE_LED);
     if (uwIC2Value != 0)
     {
       /* Duty cycle computation */
-      uwDutyCycle = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1)) * 100) / uwIC2Value;
+      uwDutyCycle1 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1)) * 100) / uwIC2Value;
 
       /* uwFrequency computation
       TIM4 counter clock = (RCC_Clocks.HCLK_Frequency) */
@@ -187,7 +201,27 @@ ExpLedToggle(ORANGE_LED);
     }
     else
     {
-      uwDutyCycle = 0;
+      uwDutyCycle1 = 0;
+      uwFrequency = 0;
+    }
+  }else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
+  {
+ExpLedToggle(GREEN_LED);
+    /* Get the Input Capture value */
+    uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);
+
+    if (uwIC2Value != 0)
+    {
+      /* Duty cycle computation */
+      uwDutyCycle2 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
+
+      /* uwFrequency computation
+      TIM4 counter clock = (RCC_Clocks.HCLK_Frequency) */
+      uwFrequency = (HAL_RCC_GetHCLKFreq()) / uwIC2Value;
+    }
+    else
+    {
+      uwDutyCycle2 = 0;
       uwFrequency = 0;
     }
   }
@@ -196,7 +230,8 @@ ExpLedToggle(ORANGE_LED);
 int GetPwmInfo(PwmInfo *pwm)
 {
 	  pwm->Freq = uwIC2Value;
-	  pwm->dutyCycle = uwDutyCycle;
+	  pwm->dutyCycle1 = uwDutyCycle1;
+	  pwm->dutyCycle2 = uwDutyCycle2;
 	  pwm->icVal = uwIC2Value;
 
 	  return 0;

@@ -142,7 +142,7 @@ int main(void)
 	for(;;){
 		GetPwmInfo(&pwm);
 
-		sprintf(outbuff, "%d  ->   Freq:%d     Duty Cycle:%d    IC:%d\r\n", ++count, (int)pwm.Freq, (int)pwm.dutyCycle, (int)pwm.icVal);
+		sprintf(outbuff, "%d  ->   Duty Cycle 1:%d    Duty Cycle 2:%d\r\n", ++count, (int)pwm.dutyCycle1, (int)pwm.dutyCycle2);
 		VCP_write(outbuff, strlen(outbuff));
 //		HAL_Delay(500);
 	}
