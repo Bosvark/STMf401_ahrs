@@ -1,3 +1,4 @@
+#include "stm32f4xx_hal_tim.h"
 #include "exp_board.h"
 
 void ExpLedInit(void)
@@ -171,7 +172,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
   if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)
   {
-	  ExpLedToggle(ORANGE_LED);
+ExpLedToggle(ORANGE_LED);
     /* Get the Input Capture value */
     uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
 
