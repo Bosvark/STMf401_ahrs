@@ -75,8 +75,10 @@ void NMI_Handler(void)
   * @param  None
   * @retval None
   */
+extern void ExpBuzzerOn(void);
 void HardFault_Handler(void)
 {
+	ExpBuzzerOn();
   /* Go to infinite loop when Hard Fault exception occurs */
   while (1)
   {
