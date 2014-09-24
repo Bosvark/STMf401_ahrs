@@ -111,69 +111,50 @@ __IO uint32_t            uwFrequency = 0;
 
 void TIM_Config(void)
 {
-//	TIM_HandleTypeDef        TimHandle;
-
-	/* Timer Input Capture Configuration Structure declaration */
 	TIM_IC_InitTypeDef       sConfig;
-
-	/* Slave configuration structure */
 	TIM_SlaveConfigTypeDef   sSlaveConfig;
 
-	/*##-1- Configure the TIM peripheral #######################################*/
-	  /* Set TIMx instance */
-	  TimHandle.Instance = TIMx;
+	TimHandle.Instance = TIMx;
 
-	  /* Initialize TIMx peripheral as follow:
-	       + Period = 0xFFFF
-	       + Prescaler = 0
-	       + ClockDivision = 0
-	       + Counter direction = Up
-	  */
-	  TimHandle.Init.Period = 0xFFFF;
-	  TimHandle.Init.Prescaler = 0;
-	  TimHandle.Init.ClockDivision = 0;
-	  TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
-	  HAL_TIM_IC_Init(&TimHandle);
+	TimHandle.Init.Period = 0xFFFF;
+	TimHandle.Init.Prescaler = 0;
+	TimHandle.Init.ClockDivision = 0;
+	TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
+	HAL_TIM_IC_Init(&TimHandle);
 
-	  /*##-2- Configure the Input Capture channels ###############################*/
-	  /* Common configuration */
-	  sConfig.ICPrescaler = TIM_ICPSC_DIV1;
-	  sConfig.ICFilter = 0;
+	// Common configuration
+	sConfig.ICPrescaler = TIM_ICPSC_DIV1;
+	sConfig.ICFilter = 0;
 
-	  /* Configure the Input Capture of channel 1 */
-	  sConfig.ICPolarity = TIM_ICPOLARITY_FALLING;
-	  sConfig.ICSelection = TIM_ICSELECTION_INDIRECTTI;
-	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_1);
+	// Configure the Input Capture of channel 1
+	sConfig.ICPolarity = TIM_ICPOLARITY_RISING;
+	sConfig.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+	HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_1);
 
-	  /* Configure the Input Capture of channel 2 */
-	  sConfig.ICPolarity = TIM_ICPOLARITY_RISING;
-	  sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
-	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_2);
+	// Configure the Input Capture of channel 2
+	sConfig.ICPolarity = TIM_ICPOLARITY_FALLING;
+	sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
+	HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_2);
 
-	  /* Configure the Input Capture of channel 3 */
-	  sConfig.ICPolarity = TIM_ICPOLARITY_FALLING;
-	  sConfig.ICSelection = TIM_ICSELECTION_INDIRECTTI;
-	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_3);
+	// Configure the Input Capture of channel 3
+	sConfig.ICPolarity = TIM_ICPOLARITY_RISING;
+	sConfig.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+	HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_3);
 
-	  /* Configure the Input Capture of channel 4 */
-	  sConfig.ICPolarity = TIM_ICPOLARITY_RISING;
-	  sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
-	  HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_4);
+	// Configure the Input Capture of channel 4
+	sConfig.ICPolarity = TIM_ICPOLARITY_FALLING;
+	sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
+	HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_4);
 
-	  /*##-3- Configure the slave mode ###########################################*/
-	  /* Select the slave Mode: Reset Mode */
-	  sSlaveConfig.SlaveMode     = TIM_SLAVEMODE_RESET;
-	  sSlaveConfig.InputTrigger  = TIM_TS_TI2FP2;
-	  HAL_TIM_SlaveConfigSynchronization(&TimHandle, &sSlaveConfig);
+	// Select the slave Mode: Reset Mode
+	sSlaveConfig.SlaveMode     = TIM_SLAVEMODE_RESET;
+	sSlaveConfig.InputTrigger  = TIM_TS_TI1FP1;
+	HAL_TIM_SlaveConfigSynchronization(&TimHandle, &sSlaveConfig);
 
-	  /*##-4- Start the Input Capture in interrupt mode ##########################*/
-	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_2);
-
-	  /*##-5- Start the Input Capture in interrupt mode ##########################*/
-	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_1);
-
-	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_4);
-	  HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_3);
+	HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_1);
+	HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_2);
+	HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_3);
+	HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_4);
 }
 
 void TIMx_IRQHandler(void)
@@ -183,48 +164,53 @@ void TIMx_IRQHandler(void)
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1){
+//		ExpLedOff(ORANGE_LED);
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
+//		ExpLedOn(ORANGE_LED);
+		ExpLedToggle(ORANGE_LED);
 
-  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)
-  {
-ExpLedToggle(ORANGE_LED);
-    /* Get the Input Capture value */
-    uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+		/* Get the Input Capture value */
+		uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
 
-    if (uwIC2Value != 0)
-    {
-      /* Duty cycle computation */
-      uwDutyCycle1 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1)) * 100) / uwIC2Value;
+		if (uwIC2Value != 0)
+		{
+			/* Duty cycle computation */
+			uwDutyCycle1 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1)) * 100) / uwIC2Value;
 
-      /* uwFrequency computation
-      TIM4 counter clock = (RCC_Clocks.HCLK_Frequency) */
-      uwFrequency = (HAL_RCC_GetHCLKFreq()) / uwIC2Value;
-    }
-    else
-    {
-      uwDutyCycle1 = 0;
-      uwFrequency = 0;
-    }
-  }else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
-  {
-ExpLedToggle(GREEN_LED);
-    /* Get the Input Capture value */
-    uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);
+			/* uwFrequency computation
+			TIM4 counter clock = (RCC_Clocks.HCLK_Frequency) */
+			uwFrequency = (HAL_RCC_GetHCLKFreq()) / uwIC2Value;
+		}
+		else
+		{
+			uwDutyCycle1 = 0;
+			uwFrequency = 0;
+		}
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3){
+//		ExpLedOff(GREEN_LED);
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
+//		ExpLedOn(GREEN_LED);
+		ExpLedToggle(GREEN_LED);
 
-    if (uwIC2Value != 0)
-    {
-      /* Duty cycle computation */
-      uwDutyCycle2 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
+		/* Get the Input Capture value */
+		uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);
 
-      /* uwFrequency computation
-      TIM4 counter clock = (RCC_Clocks.HCLK_Frequency) */
-      uwFrequency = (HAL_RCC_GetHCLKFreq()) / uwIC2Value;
-    }
-    else
-    {
-      uwDutyCycle2 = 0;
-      uwFrequency = 0;
-    }
-  }
+		if (uwIC2Value != 0)
+		{
+			/* Duty cycle computation */
+			uwDutyCycle2 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
+
+			/* uwFrequency computation
+			TIM4 counter clock = (RCC_Clocks.HCLK_Frequency) */
+			uwFrequency = (HAL_RCC_GetHCLKFreq()) / uwIC2Value;
+		}
+		else
+		{
+			uwDutyCycle2 = 0;
+			uwFrequency = 0;
+		}
+	}
 }
 
 int GetPwmInfo(PwmInfo *pwm)
