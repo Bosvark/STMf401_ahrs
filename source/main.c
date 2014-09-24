@@ -140,11 +140,10 @@ int main(void)
 	int count=0;
 
 	for(;;){
-		GetPwmInfo(&pwm);
-
-		sprintf(outbuff, "%d  ->   Duty Cycle 1:%d    Duty Cycle 2:%d\r\n", ++count, (int)pwm.dutyCycle1, (int)pwm.dutyCycle2);
-		VCP_write(outbuff, strlen(outbuff));
-//		HAL_Delay(500);
+		if(GetPwmInfo(&pwm)){
+			sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.dutyCycle1, (int)pwm.dutyCycle2, (int)pwm.dutyCycle3, (int)pwm.dutyCycle4);
+			VCP_write(outbuff, strlen(outbuff));
+		}
 	}
 }
 
