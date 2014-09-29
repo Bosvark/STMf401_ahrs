@@ -56,6 +56,11 @@ typedef struct
 	uint32_t dutyCycle2;
 	uint32_t dutyCycle3;
 	uint32_t dutyCycle4;
+
+	uint32_t pwmval1;
+	uint32_t pwmval2;
+	uint32_t pwmval3;
+	uint32_t pwmval4;
 }PwmInfo;
 
 void TIM_Config(void);

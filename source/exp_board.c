@@ -107,6 +107,10 @@ __IO uint32_t uwDutyCycle1 = 0;
 __IO uint32_t uwDutyCycle2 = 0;
 __IO uint32_t uwDutyCycle3 = 0;
 __IO uint32_t uwDutyCycle4 = 0;
+__IO uint32_t pwmval1 = 0;
+__IO uint32_t pwmval2 = 0;
+__IO uint32_t pwmval3 = 0;
+__IO uint32_t pwmval4 = 0;
 __IO char intflag=0;
 
 void TIM_Init(TIM_HandleTypeDef *timh)
@@ -116,6 +120,8 @@ void TIM_Init(TIM_HandleTypeDef *timh)
 
 	timh->Init.Period = 0xFFFF;
 	timh->Init.Prescaler = 0;
+//timh->Init.Period = 20000-1;
+timh->Init.Prescaler = ((SystemCoreClock) / 1000000) - 1;	// 1Mhz
 	timh->Init.ClockDivision = 0;
 	timh->Init.CounterMode = TIM_COUNTERMODE_UP;
 	HAL_TIM_IC_Init(timh);
@@ -173,10 +179,10 @@ void TIM4_IRQHandler(void)
 {
 	HAL_TIM_IRQHandler(&TimHandle4);
 }
-
+/*
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-	uint32_t uwIC2Value;
+	uint32_t uwIC2Value, ccr;
 
 	intflag = 0;
 
@@ -211,10 +217,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		if (uwIC2Value != 0)
 		{
 			if(htim->Instance == TIM3x){
-				uwDutyCycle1 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
+				ccr = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
+				pwmval1 = (uwIC2Value - ccr)/10;
+
+				pwmval2 = ccr;
+				pwmval3 = uwIC2Value;
+				uwDutyCycle1 = (ccr * 100) / uwIC2Value;
 				intflag = 1;
 			}else if(htim->Instance == TIM4x){
-				uwDutyCycle4 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
+				uwDutyCycle4 = ((pwmval4 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
 				intflag = 1;
 			}
 		}
@@ -227,7 +238,77 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		}
 	}
 }
+*/
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+	uint32_t CCRx_tn=0, CCRx_tn_1=0, period=0, duty_cycle=0;
 
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
+		ExpLedToggle(ORANGE_LED);
+		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);	// Input capture value
+		CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+		intflag = 1;
+
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
+		ExpLedToggle(GREEN_LED);
+		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);	// Input capture value
+		CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
+		intflag = 1;
+
+	}
+
+	if(intflag){
+		if(CCRx_tn < CCRx_tn_1)
+			period = CCRx_tn_1 - CCRx_tn;
+		else
+			period = (0xffff - CCRx_tn + CCRx_tn_1);
+
+		duty_cycle = (period * 100) / CCRx_tn_1;
+
+		if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) && (htim->Instance == TIM3x)){
+			uwDutyCycle2 = duty_cycle;
+			pwmval2 = period;
+		}else if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) && (htim->Instance == TIM4x)){
+			uwDutyCycle3 = duty_cycle;
+			pwmval3 = period;
+		}else if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4) && (htim->Instance == TIM3x)){
+			uwDutyCycle1 = duty_cycle;
+			pwmval1 = period;
+		}else if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4) && (htim->Instance == TIM4x)){
+			uwDutyCycle4 = duty_cycle;
+			pwmval4 = period;
+		}
+	}
+}
+
+/* Hierdie een werk mooi
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+	uint32_t CCRx_tn, CCRx_tn_1, period;
+
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
+		ExpLedToggle(GREEN_LED);
+
+		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);	// Input capture value
+
+		if(htim->Instance == TIM3x){
+			CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
+
+			if(CCRx_tn < CCRx_tn_1){
+				period = CCRx_tn_1 - CCRx_tn;
+				uwDutyCycle1 = (period * 100) / CCRx_tn_1;
+			}
+			else{
+				period = (0xffff - CCRx_tn + CCRx_tn_1);
+				uwDutyCycle1 = (period * 100) / CCRx_tn_1;
+			}
+
+			pwmval1 = period;
+			intflag = 1;
+		}
+	}
+}
+*/
 int GetPwmInfo(PwmInfo *pwm)
 {
 	if(intflag){
@@ -235,6 +316,14 @@ int GetPwmInfo(PwmInfo *pwm)
 	  pwm->dutyCycle2 = uwDutyCycle2;
 	  pwm->dutyCycle3 = uwDutyCycle3;
 	  pwm->dutyCycle4 = uwDutyCycle4;
+
+	  pwm->pwmval1 = pwmval1;
+	  pwm->pwmval2 = pwmval2;
+	  pwm->pwmval3 = pwmval3;
+	  pwm->pwmval4 = pwmval4;
+
+	  intflag = 0;
+
 	  return 1;
 	}
 
