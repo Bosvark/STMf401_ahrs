@@ -13,6 +13,7 @@
 #include "MadgwickAHRS.h"
 #include "FreeIMU_serial.h"
 #include "exp_board.h"
+#include "esc.h"
 
 //#define SWAP_AXIS
 
@@ -83,7 +84,7 @@ int main(void)
 
 	ExpLedInit();
 	ExpBuzzerInit();
-	EXTILine0_Config();
+//	EXTILine0_Config();
 
 	BSP_LED_On(LED3);
 
@@ -116,33 +117,32 @@ int main(void)
 	ExpBuzzerOff();
 
 	TIM_Config();
-/*
-	for(;;){
+	ESC_Init();
 
-		FreeIMU_serial(&fimu_funcs);
-	}
-*/
-/*
-	for(;;){
-		ExpLedOn(GREEN_LED);
-		HAL_Delay(500);
-		ExpLedOff(GREEN_LED);
-
-		ExpLedOn(ORANGE_LED);
-		HAL_Delay(500);
-		ExpLedOff(ORANGE_LED);
-
-		ExpLedToggle(RED_LED);
-	}
-*/
 	PwmInfo pwm;
 	char outbuff[60];
 	int count=0;
 
+	ESC_Start(1);
+	ESC_Start(2);
+	ESC_Start(3);
+	ESC_Start(4);
+
+
 	for(;;){
+//		FreeIMU_serial(&fimu_funcs);
+
 		if(GetPwmInfo(&pwm)){
-			sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.dutyCycle1, (int)pwm.dutyCycle2, (int)pwm.dutyCycle3, (int)pwm.dutyCycle4);
+
+			sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.pwmval1, (int)pwm.pwmval2, (int)pwm.pwmval3, (int)pwm.pwmval4);
 			VCP_write(outbuff, strlen(outbuff));
+
+			BSP_LED_Toggle(LED5);
+
+			ESC_Speed(pwm.pwmval1, 1);
+			ESC_Speed(pwm.pwmval2, 2);
+			ESC_Speed(pwm.pwmval3, 3);
+			ESC_Speed(pwm.pwmval4, 4);
 		}
 	}
 }
