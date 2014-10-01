@@ -108,25 +108,13 @@ void EXTI0_IRQHandler()
 TIM_HandleTypeDef        TimHandle3;
 TIM_HandleTypeDef        TimHandle4;
 
-__IO uint32_t uwDutyCycle1 = 0;
-__IO uint32_t uwDutyCycle2 = 0;
-__IO uint32_t uwDutyCycle3 = 0;
-__IO uint32_t uwDutyCycle4 = 0;
-__IO uint32_t pwmval1 = 0;
-__IO uint32_t pwmval2 = 0;
-__IO uint32_t pwmval3 = 0;
-__IO uint32_t pwmval4 = 0;
-__IO char intflag=0;
-
 void TIM_Init(TIM_HandleTypeDef *timh)
 {
 	TIM_IC_InitTypeDef       sConfig;
-	TIM_SlaveConfigTypeDef   sSlaveConfig;
 
 	timh->Init.Period = 0xFFFF;
 	timh->Init.Prescaler = 0;
-//timh->Init.Period = 20000-1;
-timh->Init.Prescaler = ((SystemCoreClock) / 1000000) - 1;	// 1Mhz
+	timh->Init.Prescaler = ((SystemCoreClock) / 1000000) - 1;	// 1Mhz
 	timh->Init.ClockDivision = 0;
 	timh->Init.CounterMode = TIM_COUNTERMODE_UP;
 	HAL_TIM_IC_Init(timh);
@@ -155,11 +143,6 @@ timh->Init.Prescaler = ((SystemCoreClock) / 1000000) - 1;	// 1Mhz
 	sConfig.ICSelection = TIM_ICSELECTION_DIRECTTI;
 	HAL_TIM_IC_ConfigChannel(timh, &sConfig, TIM_CHANNEL_4);
 
-	// Select the slave Mode: Reset Mode
-	sSlaveConfig.SlaveMode     = TIM_SLAVEMODE_RESET;
-	sSlaveConfig.InputTrigger  = TIM_TS_TI2FP2;
-	HAL_TIM_SlaveConfigSynchronization(timh, &sSlaveConfig);
-
 	HAL_TIM_IC_Start_IT(timh, TIM_CHANNEL_1);
 	HAL_TIM_IC_Start_IT(timh, TIM_CHANNEL_2);
 	HAL_TIM_IC_Start_IT(timh, TIM_CHANNEL_3);
@@ -184,155 +167,135 @@ void TIM4_IRQHandler(void)
 {
 	HAL_TIM_IRQHandler(&TimHandle4);
 }
-/*
+
+__IO uint32_t RC1_tn = 0;
+__IO uint32_t RC1_tn_1 = 0;
+__IO uint32_t RC2_tn = 0;
+__IO uint32_t RC2_tn_1 = 0;
+__IO uint32_t RC3_tn = 0;
+__IO uint32_t RC3_tn_1 = 0;
+__IO uint32_t RC4_tn = 0;
+__IO uint32_t RC4_tn_1 = 0;
+__IO uint32_t uwDutyCycle1 = 0;
+__IO uint32_t uwDutyCycle2 = 0;
+__IO uint32_t uwDutyCycle3 = 0;
+__IO uint32_t uwDutyCycle4 = 0;
+__IO uint32_t pwmval1 = 0;
+__IO uint32_t pwmval2 = 0;
+__IO uint32_t pwmval3 = 0;
+__IO uint32_t pwmval4 = 0;
+__IO char intflag1=0;
+__IO char intflag2=0;
+__IO char intflag3=0;
+__IO char intflag4=0;
+
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-	uint32_t uwIC2Value, ccr;
+	uint32_t CCRx_tn=0, CCRx_tn_1=0;
 
-	intflag = 0;
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1){
 
-	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
-
-
-		uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);	// Input capture value
-
-		if (uwIC2Value != 0)
-		{
-			if(htim->Instance == TIM3x){
-				uwDutyCycle2 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1)) * 100) / uwIC2Value;
-				intflag = 1;
-			}else if(htim->Instance == TIM4x){
-				ExpLedToggle(ORANGE_LED);
-				uwDutyCycle3 = ((HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1)) * 100) / uwIC2Value;
-				intflag = 1;
-			}
-		}
-		else
-		{
-			if(htim->Instance == TIM3x)
-				uwDutyCycle2 = 0;
-			else if(htim->Instance == TIM4x)
-				uwDutyCycle3 = 0;
-		}
-	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
-		ExpLedToggle(GREEN_LED);
-
-		uwIC2Value = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);	// Input capture value
-
-		if (uwIC2Value != 0)
-		{
-			if(htim->Instance == TIM3x){
-				ccr = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
-				pwmval1 = (uwIC2Value - ccr)/10;
-
-				pwmval2 = ccr;
-				pwmval3 = uwIC2Value;
-				uwDutyCycle1 = (ccr * 100) / uwIC2Value;
-				intflag = 1;
-			}else if(htim->Instance == TIM4x){
-				uwDutyCycle4 = ((pwmval4 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3)) * 100) / uwIC2Value;
-				intflag = 1;
-			}
-		}
-		else
-		{
-			if(htim->Instance == TIM3x)
-				uwDutyCycle1 = 0;
-			else if(htim->Instance == TIM4x)
-				uwDutyCycle4 = 0;
-		}
-	}
-}
-*/
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-	uint32_t CCRx_tn=0, CCRx_tn_1=0, period=0, duty_cycle=0;
-
-	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
-		ExpLedToggle(ORANGE_LED);
-		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);	// Input capture value
 		CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-		intflag = 1;
 
-	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
-		ExpLedToggle(GREEN_LED);
-		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);	// Input capture value
-		CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
-		intflag = 1;
-
-	}
-
-	if(intflag){
-		if(CCRx_tn < CCRx_tn_1)
-			period = CCRx_tn_1 - CCRx_tn;
-		else
-			period = (0xffff - CCRx_tn + CCRx_tn_1);
-
-		duty_cycle = (period * 100) / CCRx_tn_1;
-
-		if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) && (htim->Instance == TIM3x)){
-			uwDutyCycle2 = duty_cycle;
-			pwmval2 = period;
-		}else if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) && (htim->Instance == TIM4x)){
-			uwDutyCycle3 = duty_cycle;
-			pwmval3 = period;
-		}else if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4) && (htim->Instance == TIM3x)){
-			uwDutyCycle1 = duty_cycle;
-			pwmval1 = period;
-		}else if((htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4) && (htim->Instance == TIM4x)){
-			uwDutyCycle4 = duty_cycle;
-			pwmval4 = period;
+		if(htim->Instance == TIM3x){
+			RC2_tn = CCRx_tn;
+			intflag2 = 0;
+		}else if(htim->Instance == TIM4x){
+			RC3_tn = CCRx_tn;
+			intflag3 = 0;
 		}
-	}
-}
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
+		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);	// Input capture value
 
-/* Hierdie een werk mooi
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-	uint32_t CCRx_tn, CCRx_tn_1, period;
+		if(htim->Instance == TIM3x){
+			RC2_tn_1 = CCRx_tn_1;
+			intflag2 = 1;
+		}else if(htim->Instance == TIM4x){
+			RC3_tn_1 = CCRx_tn_1;
+			intflag3 = 1;
+		}
 
-	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
-		ExpLedToggle(GREEN_LED);
+		ExpLedToggle(ORANGE_LED);
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3){
+		CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
 
+		if(htim->Instance == TIM3x){
+			RC1_tn = CCRx_tn;
+			intflag1 = 0;
+		}else if(htim->Instance == TIM4x){
+			RC4_tn = CCRx_tn;
+			intflag4 = 0;
+		}
+	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4){
 		CCRx_tn_1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);	// Input capture value
 
 		if(htim->Instance == TIM3x){
-			CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
-
-			if(CCRx_tn < CCRx_tn_1){
-				period = CCRx_tn_1 - CCRx_tn;
-				uwDutyCycle1 = (period * 100) / CCRx_tn_1;
-			}
-			else{
-				period = (0xffff - CCRx_tn + CCRx_tn_1);
-				uwDutyCycle1 = (period * 100) / CCRx_tn_1;
-			}
-
-			pwmval1 = period;
-			intflag = 1;
+			RC1_tn_1 = CCRx_tn_1;
+			intflag1 = 1;
+		}else if(htim->Instance == TIM4x){
+			RC4_tn_1 = CCRx_tn_1;
+			intflag4 = 1;
 		}
+
+		ExpLedToggle(GREEN_LED);
 	}
 }
-*/
+
 int GetPwmInfo(PwmInfo *pwm)
 {
-	if(intflag){
-	  pwm->dutyCycle1 = uwDutyCycle1;
-	  pwm->dutyCycle2 = uwDutyCycle2;
-	  pwm->dutyCycle3 = uwDutyCycle3;
-	  pwm->dutyCycle4 = uwDutyCycle4;
+	if(intflag1 > 0){
+		if(RC1_tn < RC1_tn_1)
+			pwm->pwmval1 = RC1_tn_1 - RC1_tn;
+		else
+			pwm->pwmval1 = (0xffff - RC1_tn + RC1_tn_1);
 
-	  pwm->pwmval1 = pwmval1;
-	  pwm->pwmval2 = pwmval2;
-	  pwm->pwmval3 = pwmval3;
-	  pwm->pwmval4 = pwmval4;
+		pwm->dutyCycle1 = (pwm->pwmval1 * 100) / RC1_tn_1;
 
-	  intflag = 0;
-
-	  return 1;
+		RC1_tn = 0;
+		RC1_tn_1 = 0;
+		intflag1 = 0;
 	}
 
-	return 0;
+	if(intflag2 > 0){
+		if(RC2_tn < RC2_tn_1)
+			pwm->pwmval2 = RC2_tn_1 - RC2_tn;
+		else
+			pwm->pwmval2 = (0xffff - RC2_tn + RC2_tn_1);
+
+		pwm->dutyCycle2 = (pwm->pwmval2 * 100) / RC2_tn_1;
+
+		RC2_tn = 0;
+		RC2_tn_1 = 0;
+		intflag2 = 0;
+	}
+
+	if(intflag3 > 0){
+		if(RC3_tn < RC3_tn_1)
+			pwm->pwmval3 = RC3_tn_1 - RC3_tn;
+		else
+			pwm->pwmval3 = (0xffff - RC3_tn + RC3_tn_1);
+
+		pwm->dutyCycle3 = (pwm->pwmval3 * 100) / RC3_tn_1;
+
+		RC3_tn = 0;
+		RC3_tn_1 = 0;
+		intflag3 = 0;
+	}
+
+	if(intflag4 > 0){
+		if(RC4_tn < RC4_tn_1)
+			pwm->pwmval4 = RC4_tn_1 - RC4_tn;
+		else
+			pwm->pwmval4 = (0xffff - RC4_tn + RC4_tn_1);
+
+		pwm->dutyCycle4 = (pwm->pwmval4 * 100) / RC4_tn_1;
+
+		RC4_tn = 0;
+		RC4_tn_1 = 0;
+		intflag4 = 0;
+	}
+
+	return 1;
 }
 
 void HAL_TIM_IC_MspInit(TIM_HandleTypeDef *htim)
