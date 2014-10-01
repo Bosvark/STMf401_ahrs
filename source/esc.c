@@ -43,24 +43,14 @@ void ESC_Start(int esc_channel)
 
 void ESC_Speed(uint32_t speed, int esc_channel)
 {
-
-	TimHandle.Instance->CCR1 = speed;
-	return;
-
-	uint32_t tim_channel;
-
-
 	switch(esc_channel)
 	{
-		case 1:	tim_channel = TIM_CHANNEL_1; break;
-		case 2:	tim_channel = TIM_CHANNEL_2; break;
-		case 3:	tim_channel = TIM_CHANNEL_3; break;
-		case 4:	tim_channel = TIM_CHANNEL_4; break;
+		case 1:	TimHandle.Instance->CCR1 = speed; break;
+		case 2:	TimHandle.Instance->CCR2 = speed; break;
+		case 3:	TimHandle.Instance->CCR3 = speed; break;
+		case 4:	TimHandle.Instance->CCR4 = speed; break;
 		default: return;
 	}
-
-	sConfig.Pulse = speed;
-	HAL_TIM_PWM_ConfigChannel(&TimHandle, &sConfig, tim_channel);
 }
 
 void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)
