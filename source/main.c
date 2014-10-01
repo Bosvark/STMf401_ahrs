@@ -14,6 +14,7 @@
 #include "FreeIMU_serial.h"
 #include "exp_board.h"
 #include "esc.h"
+#include "timer.h"
 
 //#define SWAP_AXIS
 
@@ -128,6 +129,7 @@ int main(void)
 	ESC_Start(3);
 	ESC_Start(4);
 
+	int timer=0;
 
 	for(;;){
 //		FreeIMU_serial(&fimu_funcs);
@@ -144,6 +146,13 @@ int main(void)
 			ESC_Speed(pwm.pwmval3, 3);
 			ESC_Speed(pwm.pwmval4, 4);
 		}
+/*
+		if(TimerIsExpired(timer)){
+			timer = TimerStart(500);
+//			ExpBuzzerToggle();
+			ExpLedToggle(RED_LED);
+		}
+*/
 	}
 }
 
