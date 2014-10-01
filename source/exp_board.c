@@ -64,6 +64,11 @@ void ExpBuzzerOff(void)
 	HAL_GPIO_WritePin(BUZZER_PORT, BUZZER, GPIO_PIN_SET);
 }
 
+void ExpBuzzerToggle(void)
+{
+	HAL_GPIO_TogglePin(BUZZER_PORT, BUZZER);
+}
+
 void EXTILine0_Config(void)
 {
   GPIO_InitTypeDef   GPIO_InitStructure;

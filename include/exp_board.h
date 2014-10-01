@@ -21,7 +21,7 @@ void ExpLedToggle(int led);
 void ExpBuzzerInit(void);
 void ExpBuzzerOn(void);
 void ExpBuzzerOff(void);
-
+void ExpBuzzerToggle(void);
 
 //
 ///////////////////////////////////////////////////////////////////
