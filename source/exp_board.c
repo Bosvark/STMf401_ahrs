@@ -315,6 +315,9 @@ void HAL_TIM_IC_MspInit(TIM_HandleTypeDef *htim)
 	  GPIO_InitStruct.Alternate = GPIO_AF_TIM4x;
 	  HAL_GPIO_Init(GPIO_PORT, &GPIO_InitStruct);
 
+	  GPIO_InitStruct.Pin = GPIO_PIN_15;
+	  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
 	  HAL_NVIC_SetPriority(TIM4x_IRQn, 0, 1);	// TIM interrupt priority
 	  HAL_NVIC_EnableIRQ(TIM4x_IRQn);			// TIM interrupt enable
   }

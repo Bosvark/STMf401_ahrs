@@ -35,7 +35,7 @@ void EXTILine0_Config(void);
 
 /* Definition for TIM4x Pins */
 #define TIM4x_CHANNEL_GPIO_PORT()       __GPIOB_CLK_ENABLE()
-#define GPIO_PIN_TIM4x_CHANNEL_2_4      GPIO_PIN_7 | GPIO_PIN_9
+#define GPIO_PIN_TIM4x_CHANNEL_2_4      GPIO_PIN_7// | GPIO_PIN_9
 #define GPIO_AF_TIM4x                   GPIO_AF2_TIM4
 #define TIM4x_IRQn                      TIM4_IRQn
 #define TIM4x_IRQHandler                TIM4_IRQHandler

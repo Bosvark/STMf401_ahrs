@@ -79,7 +79,7 @@ int main(void)
 	BSP_LED_Init(LED3);
 	BSP_LED_Init(LED4);
 	BSP_LED_Init(LED5);
-	BSP_LED_Init(LED6);
+//	BSP_LED_Init(LED6);
 
 	SystemClock_Config();
 
@@ -110,10 +110,10 @@ int main(void)
 	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
 	USBD_Start(&USBD_Device);
 
-	BSP_LED_On(LED6);
+//	BSP_LED_On(LED6);
 	zero_gyro();
 	zero_mag();
-	BSP_LED_Off(LED6);
+//	BSP_LED_Off(LED6);
 
 	ExpBuzzerOff();
 
@@ -130,7 +130,27 @@ int main(void)
 	ESC_Start(4);
 
 	int timer=0;
+/*
+	int up=1;
+	int servo=1000;
+	for(;;){
+		if(up==1){
+			servo += 1;
 
+			if(servo >= 2000)
+				up = 0;
+		}else{
+			servo -= 1;
+
+			if(servo <= 1000)
+				up = 1;
+		}
+
+		HAL_Delay(1);
+
+		ESC_Speed(servo, 1);
+	}
+*/
 	for(;;){
 //		FreeIMU_serial(&fimu_funcs);
 
@@ -188,7 +208,7 @@ void imu_base_int(char count)
 	int pos=0;
 	int16_t ival;
 
-	BSP_LED_Off(LED6);
+//	BSP_LED_Off(LED6);
 
 	for(i=0; i<count; i++){
 		BSP_LED_Toggle(LED3);
@@ -241,7 +261,7 @@ void imu_base_int(char count)
 	}
 
 	BSP_LED_Off(LED3);
-	BSP_LED_On(LED6);
+//	BSP_LED_On(LED6);
 
 }
 
@@ -254,7 +274,7 @@ void send_quaternion(char count)
 	int pos=0, i;
 	const float gyroSensitivity = (500.0f * 2.0f)/65535; //0.0175f;
 
-	BSP_LED_Off(LED6);
+//	BSP_LED_Off(LED6);
 
 	for(i=0; i<count; i++){
 		BSP_LED_Toggle(LED3);
@@ -293,7 +313,7 @@ void send_quaternion(char count)
 	}
 
 	BSP_LED_Off(LED3);
-	BSP_LED_On(LED6);
+//	BSP_LED_On(LED6);
 }
 
 static Point3df gyro_xyz_filtered;
@@ -318,7 +338,7 @@ void send_yaw_pitch_roll(char count)
 		filter_init = 1;
 	}
 
-	BSP_LED_Off(LED6);
+//	BSP_LED_Off(LED6);
 
 	for(i=0; i<count; i++){
 		BSP_LED_Toggle(LED3);
@@ -382,7 +402,7 @@ void send_yaw_pitch_roll(char count)
 	}
 
 	BSP_LED_Off(LED3);
-	BSP_LED_On(LED6);
+//	BSP_LED_On(LED6);
 }
 
 void gyro_read(Point3df *xyz)
