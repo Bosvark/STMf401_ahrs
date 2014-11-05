@@ -15,6 +15,7 @@
 #include "exp_board.h"
 #include "esc.h"
 #include "timer.h"
+#include "altitude.h"
 
 //#define SWAP_AXIS
 
@@ -65,6 +66,7 @@ void MagPointRaw(Point3df *magpoint);
 float MagHeading(Point3df *magpoint, Point3df *accpoint);
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
 void send_quaternion(char count);
+void get_yaw_pitch_roll(float *yaw, float *pitch, float *roll);
 void send_yaw_pitch_roll(char count);
 static void SystemClock_Config(void);
 
@@ -119,6 +121,7 @@ int main(void)
 
 	TIM_Config();
 	ESC_Init();
+	AltInit();
 
 	PwmInfo pwm;
 	char outbuff[60];
@@ -130,6 +133,7 @@ int main(void)
 	ESC_Start(4);
 
 	int timer=0;
+
 /*
 	int up=1;
 	int servo=1000;
@@ -151,13 +155,16 @@ int main(void)
 		ESC_Speed(servo, 1);
 	}
 */
+	uint32_t start = HAL_GetTick();
+	uint32_t current = start;
+
 	for(;;){
 //		FreeIMU_serial(&fimu_funcs);
-
+/*
 		if(GetPwmInfo(&pwm)){
 
-			sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.pwmval1, (int)pwm.pwmval2, (int)pwm.pwmval3, (int)pwm.pwmval4);
-			VCP_write(outbuff, strlen(outbuff));
+//			sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.pwmval1, (int)pwm.pwmval2, (int)pwm.pwmval3, (int)pwm.pwmval4);
+//			VCP_write(outbuff, strlen(outbuff));
 
 			BSP_LED_Toggle(LED5);
 
@@ -165,6 +172,30 @@ int main(void)
 			ESC_Speed(pwm.pwmval2, 2);
 			ESC_Speed(pwm.pwmval3, 3);
 			ESC_Speed(pwm.pwmval4, 4);
+		}
+*/
+		float pitch=0.0;
+		get_yaw_pitch_roll(NULL, &pitch, NULL);
+
+		int servo_pitch=1000 + (pitch*(1000.0/90.0));
+		ESC_Speed(servo_pitch, 1);
+
+		current = HAL_GetTick();
+
+		if(current - start > 500){
+			float temperature = AltReadTemperature();
+			sprintf(outbuff, "Temp: %d\r\n", (int)temperature);
+			VCP_write(outbuff, strlen(outbuff));
+
+			int32_t pressure = AltReadPressure();
+			sprintf(outbuff, "Pressure: %d\r\n", pressure);
+			VCP_write(outbuff, strlen(outbuff));
+
+			float altitude = AltReadAltitude();
+			sprintf(outbuff, "Altitude: %d\r\n", (int32_t)altitude);
+			VCP_write(outbuff, strlen(outbuff));
+
+			start = HAL_GetTick();
 		}
 /*
 		if(TimerIsExpired(timer)){
@@ -323,13 +354,11 @@ static float comp_pitch=0;
 static float comp_roll=0;
 static float comp_yaw=0;
 
-void send_yaw_pitch_roll(char count)
+void get_yaw_pitch_roll(float *yaw, float *pitch, float *roll)
 {
 	Point3df gyro_xyz;
 	Point3df accel_xyz;
 	Point3df mag_xyz;
-	char outbuff[60];
-	int pos=0, i;
 	const float gyroScale = 0.001, accScale = 16348.0, alpha = 0.98;
 	float acc_pitch, gyro_pitch, error_angle, acc_roll, gyro_roll, dt;
 
@@ -338,52 +367,61 @@ void send_yaw_pitch_roll(char count)
 		filter_init = 1;
 	}
 
-//	BSP_LED_Off(LED6);
+	gyro_read(&gyro_xyz);
+	accelerometer_read(&accel_xyz);
+	MagPointRaw(&mag_xyz);
+
+	gyro_xyz.x = ((gyro_xyz.x - gyro_offs_xyz[0]) * gyroScale);
+	gyro_xyz.y = ((gyro_xyz.y - gyro_offs_xyz[1]) * gyroScale);
+	gyro_xyz.z = ((gyro_xyz.z - gyro_offs_xyz[2]) * gyroScale);
+
+	accel_xyz.x = accel_xyz.x / accScale;
+	accel_xyz.y = accel_xyz.y / accScale;
+	accel_xyz.z = accel_xyz.z / accScale;
+
+	float current_time = (float)HAL_GetTick()/1000000;
+	dt = current_time - previous_time;
+
+	acc_pitch = atanf((accel_xyz.x / sqrtf(powf(accel_xyz.y, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
+	gyro_pitch += gyro_xyz.x * dt;
+
+	acc_roll = atanf((accel_xyz.y / sqrtf(powf(accel_xyz.x, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
+	gyro_roll -= gyro_xyz.y * dt;
+
+	// Complementary Filter Implementation #3:
+	comp_pitch = comp_pitch + gyro_pitch*dt;
+	error_angle = acc_pitch - comp_pitch;
+	comp_pitch = comp_pitch + (1-alpha)*error_angle;
+
+	comp_roll = comp_roll + gyro_roll*dt;
+	error_angle = acc_roll - comp_roll;
+	comp_roll = comp_roll + (1-alpha)*error_angle;
+
+	comp_yaw = MagHeading(&mag_xyz, &accel_xyz);
+
+	previous_time = current_time;
+
+	if(yaw != NULL)
+		*yaw = comp_yaw;
+
+	if(pitch != NULL)
+		*pitch = comp_pitch;
+
+	if(roll != NULL)
+		*roll = comp_roll;
+}
+
+void send_yaw_pitch_roll(char count)
+{
+	char outbuff[60];
+	int pos=0, i=0;
 
 	for(i=0; i<count; i++){
-		BSP_LED_Toggle(LED3);
+		float yaw=0.0, pitch=0.0, roll=0.0;
 
-		gyro_read(&gyro_xyz);
-		accelerometer_read(&accel_xyz);
-		MagPointRaw(&mag_xyz);
-
-		gyro_xyz.x = ((gyro_xyz.x - gyro_offs_xyz[0]) * gyroScale);
-		gyro_xyz.y = ((gyro_xyz.y - gyro_offs_xyz[1]) * gyroScale);
-		gyro_xyz.z = ((gyro_xyz.z - gyro_offs_xyz[2]) * gyroScale);
-
-		accel_xyz.x = accel_xyz.x / accScale;
-		accel_xyz.y = accel_xyz.y / accScale;
-		accel_xyz.z = accel_xyz.z / accScale;
-
-		float current_time = (float)HAL_GetTick()/1000000;
-		dt = current_time - previous_time;
-
-		acc_pitch = atanf((accel_xyz.x / sqrtf(powf(accel_xyz.y, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
-		gyro_pitch += gyro_xyz.x * dt;
-
-		acc_roll = atanf((accel_xyz.y / sqrtf(powf(accel_xyz.x, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;
-		gyro_roll -= gyro_xyz.y * dt;
-/*
-		// Complementary Filter Implementation #1:
-		// angle = (0.98)*(angle + gyro*dt) + (0.02)*(x_acc);
-		comp_pitch = alpha * (comp_pitch + gyro_pitch * dt) + (1.0 - alpha) * acc_pitch;
-		comp_roll = alpha * (comp_roll + gyro_roll * dt) + (1.0 - alpha) * acc_roll;
-*/
-		// Complementary Filter Implementation #3:
-		comp_pitch = comp_pitch + gyro_pitch*dt;
-		error_angle = acc_pitch - comp_pitch;
-		comp_pitch = comp_pitch + (1-alpha)*error_angle;
-
-		comp_roll = comp_roll + gyro_roll*dt;
-		error_angle = acc_roll - comp_roll;
-		comp_roll = comp_roll + (1-alpha)*error_angle;
-
-		comp_yaw = MagHeading(&mag_xyz, &accel_xyz);
-
-		previous_time = current_time;
+		get_yaw_pitch_roll(&yaw, &pitch, &roll);
 
 		pos = 0;
-
 		hex_to_ascii((unsigned char*)&comp_yaw, &outbuff[pos], sizeof(float));
 		pos += sizeof(float)*2;
 		outbuff[pos++] = ',';
