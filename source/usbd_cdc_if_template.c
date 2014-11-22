@@ -244,29 +244,28 @@ int VCP_read(void *pBuffer, int size)
 
 int VCP_write(const void *pBuffer, int size)
 {
-    if (size > CDC_DATA_HS_OUT_PACKET_SIZE)
-    {
-        int offset;
-        for (offset = 0; offset < size; offset++)
-        {
-            int todo = MIN(CDC_DATA_HS_OUT_PACKET_SIZE,
-                           size - offset);
-            int done = VCP_write(((char *)pBuffer) + offset, todo);
-            if (done != todo)
-                return offset + done;
-        }
+	if (size > CDC_DATA_HS_OUT_PACKET_SIZE)
+	{
+		int offset;
+		for (offset = 0; offset < size; offset++)
+		{
+			int todo = MIN(CDC_DATA_HS_OUT_PACKET_SIZE,
+						   size - offset);
+			int done = VCP_write(((char *)pBuffer) + offset, todo);
+			if (done != todo)
+				return offset + done;
+		}
 
-        return size;
-    }
+		return size;
+	}
 
-    USBD_CDC_HandleTypeDef *pCDC =
-            (USBD_CDC_HandleTypeDef *)USBD_Device.pClassData;
-    while(pCDC->TxState) { } //Wait for previous transfer
+//	USBD_CDC_HandleTypeDef *pCDC = (USBD_CDC_HandleTypeDef *)USBD_Device.pClassData;
+//	while(pCDC->TxState) { } //Wait for previous transfer
 
-    USBD_CDC_SetTxBuffer(&USBD_Device, (uint8_t *)pBuffer, size);
-    if (USBD_CDC_TransmitPacket(&USBD_Device) != USBD_OK)
-        return 0;
+	USBD_CDC_SetTxBuffer(&USBD_Device, (uint8_t *)pBuffer, size);
+	if (USBD_CDC_TransmitPacket(&USBD_Device) != USBD_OK)
+		return 0;
 
-    while(pCDC->TxState) { } //Wait until transfer is done
-    return size;
+//	while(pCDC->TxState) { } //Wait until transfer is done
+	return size;
 }
