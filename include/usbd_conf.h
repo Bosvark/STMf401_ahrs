@@ -47,7 +47,7 @@
  
 /* Exported macro ------------------------------------------------------------*/
 /* Memory management macros */
-#define MAX_STATIC_ALLOC_SIZE 64 /* CDC Class structure size was 4 for HID*/
+#define MAX_STATIC_ALLOC_SIZE 84//64 /* CDC Class structure size was 4 for HID*/
 #define USBD_malloc				USBD_static_malloc
 #define USBD_free				USBD_static_free
 
