@@ -16,6 +16,8 @@
 #include "esc.h"
 #include "timer.h"
 #include "altitude.h"
+#include "flashmem.h"
+#include "pid.h"
 
 //#define SWAP_AXIS
 
@@ -76,6 +78,10 @@ void imu_base_int(char count);
 
 int main(void)
 {
+	PwmInfo pwm;
+	char outbuff[60];
+	int count=0;
+
 	HAL_Init();
 
 	BSP_LED_Init(LED3);
@@ -106,26 +112,25 @@ int main(void)
 	fimu_funcs.GetQuat = &send_quaternion;
 	fimu_funcs.GetAttitude = &send_yaw_pitch_roll;
 
+//	BSP_LED_On(LED6);
+	zero_gyro();
+	zero_mag();
+//	BSP_LED_Off(LED6);
+
 	USBD_Init(&USBD_Device, &VCP_Desc, 0);
 
 	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
 	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
 	USBD_Start(&USBD_Device);
 
-//	BSP_LED_On(LED6);
-	zero_gyro();
-	zero_mag();
-//	BSP_LED_Off(LED6);
-
 	ExpBuzzerOff();
 
 	TIM_Config();
 	ESC_Init();
 	AltInit();
+	FlashMemInit();
 
-	PwmInfo pwm;
-	char outbuff[60];
-	int count=0;
+	PIDInit();
 
 	ESC_Start(1);
 	ESC_Start(2);
@@ -174,6 +179,24 @@ int main(void)
 			ESC_Speed(pwm.pwmval4, 4);
 		}
 */
+
+		float pitch=0.0;
+		get_yaw_pitch_roll(NULL, &pitch, NULL);
+
+		int servo_pitch=1000 + (pitch*(1000.0/90.0));
+//		ESC_Speed(servo_pitch, 1);
+
+//		sprintf(outbuff, "Pitch -> %d\r\n", (int)pitch);
+//		VCP_write(outbuff, strlen(outbuff));
+
+
+		uint8_t id=0, type=0,cap=0;
+		FlashMemChipID(&id, &type, &cap);
+		sprintf(outbuff, "Chip 0x%02X 0x%02X 0x%02X\r\n", id, type, cap);
+		VCP_write(outbuff, strlen(outbuff));
+
+/*
+//		Moves a servo in step with angle
 		float pitch=0.0;
 		get_yaw_pitch_roll(NULL, &pitch, NULL);
 
@@ -196,12 +219,6 @@ int main(void)
 			VCP_write(outbuff, strlen(outbuff));
 
 			start = HAL_GetTick();
-		}
-/*
-		if(TimerIsExpired(timer)){
-			timer = TimerStart(500);
-//			ExpBuzzerToggle();
-			ExpLedToggle(RED_LED);
 		}
 */
 	}

@@ -24,7 +24,7 @@ void FlashMemInit(void)
 	HAL_GPIO_Init(FLASHMEM_PORT, &GPIO_InitStructure);
 
 	GPIO_InitStructure.Pin = FLASHMEM_CS;
-	GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
+	GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStructure.Pull  = GPIO_PULLUP;
 	GPIO_InitStructure.Speed = GPIO_SPEED_MEDIUM;
 	GPIO_InitStructure.Alternate = 0;
@@ -33,7 +33,7 @@ void FlashMemInit(void)
 	FLASHMEM_CS_HIGH();
 
 	FlashMemSpiHandle.Instance = FLASHMEM_SPI;
-	FlashMemSpiHandle.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+	FlashMemSpiHandle.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
 	FlashMemSpiHandle.Init.Direction = SPI_DIRECTION_2LINES;
 	FlashMemSpiHandle.Init.CLKPhase = SPI_PHASE_1EDGE;
 	FlashMemSpiHandle.Init.CLKPolarity = SPI_POLARITY_LOW;
