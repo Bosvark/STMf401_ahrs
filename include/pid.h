@@ -3,13 +3,13 @@
 
 #include <stdint.h>
 
-#define VV_MAX				1000
-#define VV_MIN				2000
+#define VV_MAX				100
+#define VV_MIN				0
 #define VV_DEADLINE			0
 
-#define SPEED_KP      3
+#define SPEED_KP      15
 #define SPEED_KI      0
-#define SPEED_KD      2
+#define SPEED_KD      0
 
 #define SPEED_KP_1    15
 #define SPEED_KI_1    5

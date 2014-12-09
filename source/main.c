@@ -10,14 +10,14 @@
 #include <math.h>
 #include "usbd_conf.h"
 #include "usbd_desc.h"
-#include "MadgwickAHRS.h"
-#include "FreeIMU_serial.h"
 #include "exp_board.h"
 #include "esc.h"
 #include "timer.h"
 #include "altitude.h"
 #include "flashmem.h"
 #include "pid.h"
+
+#define DEBUG_ON
 
 //#define SWAP_AXIS
 
@@ -55,8 +55,8 @@ USBD_HandleTypeDef USBD_Device;
 static Point3df mag_offs_min;
 static Point3df mag_offs_max;
 static Point3df mag_offs;
+static char armed_flag = 0;
 
-static FreeIMU_Func fimu_funcs;
 float previous_time=0;
 
 void gyro_read(Point3df *xyz);
@@ -67,18 +67,17 @@ void MagInit(void);
 void MagPointRaw(Point3df *magpoint);
 float MagHeading(Point3df *magpoint, Point3df *accpoint);
 void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
-void send_quaternion(char count);
 void get_yaw_pitch_roll(float *yaw, float *pitch, float *roll);
-void send_yaw_pitch_roll(char count);
 static void SystemClock_Config(void);
 
+void unarmed_process(void);
+void armed_process(PwmInfo *pwm);
 void version(void);
 void imu_raw(void);
 void imu_base_int(char count);
 
 int main(void)
 {
-	PwmInfo pwm;
 	char outbuff[60];
 	int count=0;
 
@@ -106,16 +105,8 @@ int main(void)
 	memset(&prev_gyro_xyz, 0, sizeof(Point3df));
 	memset(&gyro_offs_xyz, 0, sizeof(gyro_offs_xyz));
 
-	fimu_funcs.GetVersion = &version;
-	fimu_funcs.GetIMURaw = &imu_raw;
-	fimu_funcs.GetBaseValues = &imu_base_int;
-	fimu_funcs.GetQuat = &send_quaternion;
-	fimu_funcs.GetAttitude = &send_yaw_pitch_roll;
-
-//	BSP_LED_On(LED6);
 	zero_gyro();
 	zero_mag();
-//	BSP_LED_Off(LED6);
 
 	USBD_Init(&USBD_Device, &VCP_Desc, 0);
 
@@ -132,37 +123,118 @@ int main(void)
 
 	PIDInit();
 
-	ESC_Start(1);
-	ESC_Start(2);
-	ESC_Start(3);
-	ESC_Start(4);
-
 	int timer=0;
 
-/*
-	int up=1;
-	int servo=1000;
-	for(;;){
-		if(up==1){
-			servo += 1;
-
-			if(servo >= 2000)
-				up = 0;
-		}else{
-			servo -= 1;
-
-			if(servo <= 1000)
-				up = 1;
-		}
-
-		HAL_Delay(1);
-
-		ESC_Speed(servo, 1);
-	}
-*/
 	uint32_t start = HAL_GetTick();
 	uint32_t current = start;
 
+	float roll=0.0;
+	int motorspeed = 1000;
+	int speed_step = 1;
+
+	float min=100.0, max=-100.0;
+
+	for(;;){
+		current = HAL_GetTick();
+
+		if(armed_flag == 0){
+			motorspeed = 1000;
+			speed_step = 1;
+
+			if(current - start > 20){
+				PwmInfo pwm;
+				GetPwmInfo(&pwm);
+
+				get_yaw_pitch_roll(NULL, NULL, &roll);
+				roll = roll * -1;
+
+				if(roll < min)
+					min = roll;
+
+				if(roll > max)
+					max = roll;
+
+				sprintf(outbuff, "Roll: %04d min: %04d max: %04d Throttle: %04d kP: %04d\r\n", (int)roll, (int)min, (int)max, (int)pwm.pwmval3, (int)((pwm.pwmval1 - 1100)/25));
+				VCP_write(outbuff, strlen(outbuff));
+
+				ESC_Speed(motorspeed, 4);
+			}
+
+			ExpLedOn(RED_LED);
+			ExpLedOff(GREEN_LED);
+
+			unarmed_process();
+#if 0
+			PwmInfo pwm;
+			GetPwmInfo(&pwm);
+			sprintf(outbuff, "Channel 1: %04d\r\n", pwm.pwmval1);
+			VCP_write(outbuff, strlen(outbuff));
+#endif
+		}else{
+			ExpLedOff(RED_LED);
+			ExpLedOn(GREEN_LED);
+
+			if(current % 2 == 0){	// 500HZ
+				get_yaw_pitch_roll(NULL, NULL, &roll);
+			}
+
+			if(current % 30 == 10){	// 30Hz
+				ExpLedToggle(ORANGE_LED);
+
+				roll = roll * -1;
+
+				PwmInfo pwm;
+				GetPwmInfo(&pwm);
+
+				armed_process(&pwm);
+
+				if(armed_flag == 0)
+					continue;
+
+				//
+				// SAFETY FIRST!!!
+				//
+				if((pwm.pwmval3 >= 1000) && (pwm.pwmval3 <= 1800))
+					motorspeed = pwm.pwmval3;
+
+				if((pwm.pwmval1 >= 1000) && (pwm.pwmval1 <= 1800))
+					sPID.v_Kp = (pwm.pwmval1 - 1100)/25;
+
+				sPID.vi_Ref = 0;
+				sPID.vi_FeedBack = roll;
+				sPID.vl_PreU = speed_step;
+				speed_step = V_PIDCalc(&sPID);
+
+				sprintf(outbuff, "Roll: %04d  Speed: %04d Throttle: %04d kP: %04d\r\n", (int)roll, (int)motorspeed+speed_step, pwm.pwmval3, (int)sPID.v_Kp);
+				VCP_write(outbuff, strlen(outbuff));
+
+				ESC_Speed(motorspeed+speed_step, 4);
+			}
+		}
+	}
+/*
+		int servo_pitch=1000 + (pitch*(1000.0/90.0));
+		ESC_Speed(servo_pitch, 1);
+
+		current = HAL_GetTick();
+
+		if(current - start > 500){
+			float temperature = AltReadTemperature();
+			sprintf(outbuff, "Temp: %d\r\n", (int)temperature);
+			VCP_write(outbuff, strlen(outbuff));
+
+			int32_t pressure = AltReadPressure();
+			sprintf(outbuff, "Pressure: %d\r\n", pressure);
+			VCP_write(outbuff, strlen(outbuff));
+
+			float altitude = AltReadAltitude();
+			sprintf(outbuff, "Altitude: %d\r\n", (int32_t)altitude);
+			VCP_write(outbuff, strlen(outbuff));
+
+			start = HAL_GetTick();
+		}
+	}
+*/
 	for(;;){
 //		FreeIMU_serial(&fimu_funcs);
 /*
@@ -183,18 +255,18 @@ int main(void)
 		float pitch=0.0;
 		get_yaw_pitch_roll(NULL, &pitch, NULL);
 
-		int servo_pitch=1000 + (pitch*(1000.0/90.0));
+//		int servo_pitch=1000 + (pitch*(1000.0/90.0));
 //		ESC_Speed(servo_pitch, 1);
 
 //		sprintf(outbuff, "Pitch -> %d\r\n", (int)pitch);
 //		VCP_write(outbuff, strlen(outbuff));
 
-
+/*
 		uint8_t id=0, type=0,cap=0;
 		FlashMemChipID(&id, &type, &cap);
 		sprintf(outbuff, "Chip 0x%02X 0x%02X 0x%02X\r\n", id, type, cap);
 		VCP_write(outbuff, strlen(outbuff));
-
+*/
 /*
 //		Moves a servo in step with angle
 		float pitch=0.0;
@@ -221,6 +293,69 @@ int main(void)
 			start = HAL_GetTick();
 		}
 */
+	}
+}
+
+void unarmed_process(void)
+{
+	PwmInfo pwm;
+
+	GetPwmInfo(&pwm);
+
+	if((pwm.pwmval3 == 0) || (pwm.pwmval4 == 0))
+		return;
+
+#ifdef DEBUG_ON
+	char outbuff[60];
+	int count=0;
+	sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.pwmval1, (int)pwm.pwmval2, (int)pwm.pwmval3, (int)pwm.pwmval4);
+//	VCP_write(outbuff, strlen(outbuff));
+#endif // DEBUG_ON
+
+	if((pwm.pwmval3 >= 1000) &&(pwm.pwmval3 <= 1150) && (pwm.pwmval4 >= 1900) && (pwm.pwmval4 <= 2000)){
+		ExpBuzzerOn();
+		HAL_Delay(500);
+		ExpBuzzerOff();
+
+//		ESC_Start(1);
+//		ESC_Start(2);
+//		ESC_Start(3);
+		ESC_Start(4);
+
+		armed_flag = 1;
+	}
+}
+
+void armed_process(PwmInfo *pwm)
+{
+	GetPwmInfo(pwm);
+
+	if((pwm->pwmval3 == 0) || (pwm->pwmval4 == 0))
+		return;
+
+#ifdef DEBUG_ON
+	char outbuff[60];
+	int count=0;
+	sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm->pwmval1, (int)pwm->pwmval2, (int)pwm->pwmval3, (int)pwm->pwmval4);
+//	VCP_write(outbuff, strlen(outbuff));
+#endif // DEBUG_ON
+
+	if((pwm->pwmval3 >= 1000) && (pwm->pwmval3 <= 1150) && (pwm->pwmval4 >= 1000) &&(pwm->pwmval4 <= 1150)){
+		ESC_Speed(0, 1);
+		ESC_Speed(0, 2);
+		ESC_Speed(0, 3);
+		ESC_Speed(0, 4);
+
+		ExpBuzzerOn();
+		HAL_Delay(500);
+		ExpBuzzerOff();
+		HAL_Delay(250);
+		ExpBuzzerOn();
+		HAL_Delay(500);
+		ExpBuzzerOff();
+
+		armed_flag = 0;
+VCP_write(outbuff, strlen(outbuff));
 	}
 }
 
@@ -313,57 +448,6 @@ void imu_base_int(char count)
 
 }
 
-void send_quaternion(char count)
-{
-	Point3df gyro_xyz;
-	Point3df accel_xyz;
-	Point3df mag_xyz;
-	char outbuff[60];
-	int pos=0, i;
-	const float gyroSensitivity = (500.0f * 2.0f)/65535; //0.0175f;
-
-//	BSP_LED_Off(LED6);
-
-	for(i=0; i<count; i++){
-		BSP_LED_Toggle(LED3);
-
-		gyro_read(&gyro_xyz);
-		accelerometer_read(&accel_xyz);
-		MagPointRaw(&mag_xyz);
-
-		gyro_xyz.x = ((gyro_xyz.x - gyro_offs_xyz[0]) * gyroSensitivity);
-		gyro_xyz.y = ((gyro_xyz.y - gyro_offs_xyz[1]) * gyroSensitivity);
-		gyro_xyz.z = ((gyro_xyz.z - gyro_offs_xyz[2]) * gyroSensitivity);
-
-		MadgwickAHRSupdate(DEG2RAD(gyro_xyz.x), DEG2RAD(gyro_xyz.y), DEG2RAD(gyro_xyz.z), accel_xyz.x, accel_xyz.y, accel_xyz.z, mag_xyz.x, mag_xyz.y, mag_xyz.z);
-
-		pos = 0;
-
-		hex_to_ascii((unsigned char*)&q0, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-
-		hex_to_ascii((unsigned char*)&q1, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-
-		hex_to_ascii((unsigned char*)&q2, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-
-		hex_to_ascii((unsigned char*)&q3, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-		outbuff[pos++] = '\r';
-		outbuff[pos++] = '\n';
-
-		VCP_write(outbuff, pos);
-	}
-
-	BSP_LED_Off(LED3);
-//	BSP_LED_On(LED6);
-}
-
 static Point3df gyro_xyz_filtered;
 static char filter_init=0;
 
@@ -426,38 +510,6 @@ void get_yaw_pitch_roll(float *yaw, float *pitch, float *roll)
 
 	if(roll != NULL)
 		*roll = comp_roll;
-}
-
-void send_yaw_pitch_roll(char count)
-{
-	char outbuff[60];
-	int pos=0, i=0;
-
-	for(i=0; i<count; i++){
-		float yaw=0.0, pitch=0.0, roll=0.0;
-
-		get_yaw_pitch_roll(&yaw, &pitch, &roll);
-
-		pos = 0;
-		hex_to_ascii((unsigned char*)&comp_yaw, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-
-		hex_to_ascii((unsigned char*)&comp_pitch, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-
-		hex_to_ascii((unsigned char*)&comp_roll, &outbuff[pos], sizeof(float));
-		pos += sizeof(float)*2;
-		outbuff[pos++] = ',';
-		outbuff[pos++] = '\r';
-		outbuff[pos++] = '\n';
-
-		VCP_write(outbuff, pos);
-	}
-
-	BSP_LED_Off(LED3);
-//	BSP_LED_On(LED6);
 }
 
 void gyro_read(Point3df *xyz)

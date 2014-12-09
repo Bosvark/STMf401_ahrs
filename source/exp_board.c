@@ -214,8 +214,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			RC3_tn_1 = CCRx_tn_1;
 			intflag3 = 1;
 		}
-
-		ExpLedToggle(ORANGE_LED);
 	}else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3){
 		CCRx_tn = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
 
@@ -247,7 +245,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		if(RC1_tn < RC1_tn_1)
 			pwm->pwmval1 = RC1_tn_1 - RC1_tn;
 		else
-			pwm->pwmval1 = (0xffff - RC1_tn + RC1_tn_1);
+			pwm->pwmval1 = (0xffffffff - RC1_tn + RC1_tn_1);
 
 		pwm->dutyCycle1 = (pwm->pwmval1 * 100) / RC1_tn_1;
 
@@ -260,7 +258,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		if(RC2_tn < RC2_tn_1)
 			pwm->pwmval2 = RC2_tn_1 - RC2_tn;
 		else
-			pwm->pwmval2 = (0xffff - RC2_tn + RC2_tn_1);
+			pwm->pwmval2 = (0xffffffff - RC2_tn + RC2_tn_1);
 
 		pwm->dutyCycle2 = (pwm->pwmval2 * 100) / RC2_tn_1;
 
@@ -273,7 +271,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		if(RC3_tn < RC3_tn_1)
 			pwm->pwmval3 = RC3_tn_1 - RC3_tn;
 		else
-			pwm->pwmval3 = (0xffff - RC3_tn + RC3_tn_1);
+			pwm->pwmval3 = (0xffffffff - RC3_tn + RC3_tn_1);
 
 		pwm->dutyCycle3 = (pwm->pwmval3 * 100) / RC3_tn_1;
 
@@ -286,7 +284,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		if(RC4_tn < RC4_tn_1)
 			pwm->pwmval4 = RC4_tn_1 - RC4_tn;
 		else
-			pwm->pwmval4 = (0xffff - RC4_tn + RC4_tn_1);
+			pwm->pwmval4 = (0xffffffff - RC4_tn + RC4_tn_1);
 
 		pwm->dutyCycle4 = (pwm->pwmval4 * 100) / RC4_tn_1;
 
