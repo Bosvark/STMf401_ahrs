@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define VV_MAX				100
+#define VV_MAX				500
 #define VV_MIN				0
 #define VV_DEADLINE			0
 

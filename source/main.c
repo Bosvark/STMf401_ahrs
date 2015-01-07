@@ -70,7 +70,7 @@ void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_l
 void get_yaw_pitch_roll(float *yaw, float *pitch, float *roll);
 static void SystemClock_Config(void);
 
-void unarmed_process(void);
+void unarmed_process(PwmInfo *pwm);
 void armed_process(PwmInfo *pwm);
 void version(void);
 void imu_raw(void);
@@ -125,8 +125,7 @@ int main(void)
 
 	int timer=0;
 
-	uint32_t start = HAL_GetTick();
-	uint32_t current = start;
+	uint32_t current = HAL_GetTick();
 
 	float roll=0.0;
 	int motorspeed = 1000;
@@ -138,12 +137,26 @@ int main(void)
 		current = HAL_GetTick();
 
 		if(armed_flag == 0){
+			ExpLedOn(RED_LED);
+			ExpLedOff(GREEN_LED);
+
 			motorspeed = 1000;
 			speed_step = 1;
 
-			if(current - start > 20){
+			if(current % 2 == 0){	// 500HZ
+				get_yaw_pitch_roll(NULL, NULL, &roll);
+			}
+
+			if(current % 30 == 10){	// 30Hz
+				ExpLedToggle(ORANGE_LED);
+
 				PwmInfo pwm;
 				GetPwmInfo(&pwm);
+
+				unarmed_process(&pwm);
+
+				if(armed_flag == 1)
+					continue;
 
 				get_yaw_pitch_roll(NULL, NULL, &roll);
 				roll = roll * -1;
@@ -160,10 +173,6 @@ int main(void)
 				ESC_Speed(motorspeed, 4);
 			}
 
-			ExpLedOn(RED_LED);
-			ExpLedOff(GREEN_LED);
-
-			unarmed_process();
 #if 0
 			PwmInfo pwm;
 			GetPwmInfo(&pwm);
@@ -205,10 +214,10 @@ int main(void)
 				sPID.vl_PreU = speed_step;
 				speed_step = V_PIDCalc(&sPID);
 
-				sprintf(outbuff, "Roll: %04d  Speed: %04d Throttle: %04d kP: %04d\r\n", (int)roll, (int)motorspeed+speed_step, pwm.pwmval3, (int)sPID.v_Kp);
+				sprintf(outbuff, "Roll: %04d  Speed: %04d speed_step: %04d Throttle: %04d kP: %04d\r\n", (int)roll, (int)motorspeed+speed_step, speed_step, pwm.pwmval3, (int)sPID.v_Kp);
 				VCP_write(outbuff, strlen(outbuff));
 
-				ESC_Speed(motorspeed+speed_step, 4);
+//				ESC_Speed(motorspeed+speed_step, 4);
 			}
 		}
 	}
@@ -296,23 +305,21 @@ int main(void)
 	}
 }
 
-void unarmed_process(void)
+void unarmed_process(PwmInfo *pwm)
 {
-	PwmInfo pwm;
+	GetPwmInfo(pwm);
 
-	GetPwmInfo(&pwm);
-
-	if((pwm.pwmval3 == 0) || (pwm.pwmval4 == 0))
+	if((pwm->pwmval3 == 0) || (pwm->pwmval4 == 0))
 		return;
 
 #ifdef DEBUG_ON
 	char outbuff[60];
 	int count=0;
-	sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.pwmval1, (int)pwm.pwmval2, (int)pwm.pwmval3, (int)pwm.pwmval4);
+	sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm->pwmval1, (int)pwm->pwmval2, (int)pwm->pwmval3, (int)pwm->pwmval4);
 //	VCP_write(outbuff, strlen(outbuff));
 #endif // DEBUG_ON
 
-	if((pwm.pwmval3 >= 1000) &&(pwm.pwmval3 <= 1150) && (pwm.pwmval4 >= 1900) && (pwm.pwmval4 <= 2000)){
+	if((pwm->pwmval3 >= 1000) &&(pwm->pwmval3 <= 1150) && (pwm->pwmval4 >= 1900) && (pwm->pwmval4 <= 2000)){
 		ExpBuzzerOn();
 		HAL_Delay(500);
 		ExpBuzzerOff();
