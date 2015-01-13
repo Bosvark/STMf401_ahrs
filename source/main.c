@@ -76,6 +76,40 @@ void version(void);
 void imu_raw(void);
 void imu_base_int(char count);
 
+void FlashTest(void)
+{
+	char outbuff[60];
+	uint8_t id=0, mem_type=0, capacity=0;
+	FlashStatusRegister status;
+/*
+	FlashWREN();
+	FlashPageProgram(0, "Hello World!\0", 13);
+	FlashWRDI();
+*/
+	while(1){
+		FlashMemChipID(&id, &mem_type, &capacity);
+		sprintf(outbuff, "FlashMemChipID id:0x%02x mem_type:0x%02x capacity:0x%02x\r\n", id, mem_type, capacity);
+		VCP_write(outbuff, strlen(outbuff));
+
+		FlashWREN();
+		FlashStatus(&status, &id, &mem_type);
+
+		sprintf(outbuff, "Status after WREN %i rdsr1:0x%02x rdsr1:0x%02x\r\n", status.wel, id, mem_type);
+		VCP_write(outbuff, strlen(outbuff));
+
+		FlashWRDI();
+		FlashStatus(&status, &id, &mem_type);
+
+		sprintf(outbuff, "Status after WRDI %irdsr1:0x%02x rdsr1:0x%02x\r\n", status.wel, id, mem_type);
+		VCP_write(outbuff, strlen(outbuff));
+
+		FlashFastRead(0, (unsigned char*)outbuff, 13);
+		VCP_write(outbuff, strlen(outbuff));
+
+		HAL_Delay(1000);
+	}
+}
+
 int main(void)
 {
 	char outbuff[60];
@@ -120,6 +154,7 @@ int main(void)
 	ESC_Init();
 	AltInit();
 	FlashMemInit();
+FlashTest();
 
 	PIDInit();
 
