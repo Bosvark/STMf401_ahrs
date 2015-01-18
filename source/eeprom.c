@@ -29,7 +29,7 @@
 
 #define EEPROM_ADDR_SECTOR1		0x00000000
 #define EEPROM_ADDR_SECTOR2		0x00001000
-#define EEPROM_SECTOR_SIZE		0x00000ff//0x00000fff
+#define EEPROM_SECTOR_SIZE		0x00000fff
 
 #define SECTOR_STATE_ERASED		0xffffffff
 #define SECTOR_STATE_RECEIVING	0xeeeeeeee
@@ -66,14 +66,47 @@ uint32_t EEPROMInit(void)
 	if(id != 0x37 || mem_type != 0x30 || capacity != 0x16)
 		return -1;
 
-//	FlashChipErase();
+	FlashChipErase();
 
 	return eeprom_find_valid_sector();
 }
 
 int32_t EEPROMGet(VARIABLE varid, uint8_t *data)
 {
-	return 0l;
+	uint32_t sector_addr = valid_sector+sizeof(uint32_t), var=0, length=0,i;
+
+	if(varid >= VAR_THE_END)
+		return -1;
+
+	VarDef *def = &vardefs[varid];
+
+	// Start at the previous address
+	if(def->virtual_address != 0)
+		sector_addr = def->virtual_address;
+
+	while(sector_addr + def->length + (2 * sizeof(uint32_t)) < valid_sector + EEPROM_SECTOR_SIZE){
+		FlashFastRead(&sector_addr, (uint8_t*)&var, sizeof(var));
+
+		if(var == (uint32_t)varid)
+			def->virtual_address = sector_addr;
+
+		sector_addr += sizeof(uint32_t);
+
+		FlashFastRead(&sector_addr, (uint8_t*)&length, sizeof(length));
+		sector_addr += sizeof(uint32_t);
+
+		if(var == (uint32_t)varid){
+			for(i=0; i<length; i++){
+				FlashFastRead(&sector_addr, (uint8_t*)&data[i], 1);
+				sector_addr++;
+			}
+
+			return 0;
+		}else
+			sector_addr += length;
+	}
+
+	return -1;
 }
 
 int32_t EEPROMSet(VARIABLE varid, uint8_t *data)
@@ -101,7 +134,6 @@ VCP_write("EEPROMSet\r\n", 11);
 		FlashFastRead(&sector_addr, (uint8_t*)&var, sizeof(var));
 
 		if(var == ADDRESS_CLEAR){
-// TODO: Page boundary check
 			def->virtual_address = sector_addr;
 			FlashPageProgram(&sector_addr, (uint8_t*)&def->var, sizeof(uint32_t));		// Variable ID
 			sector_addr += sizeof(uint32_t);

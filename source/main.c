@@ -114,48 +114,64 @@ void FlashTest(void)
 
 void EEPROM_Test(void){
 	char outbuff[60];
-	uint8_t inbuffer[16];
-	uint32_t var_test1=0, counter=0, i;
+	uint8_t inbuffer[16], var_test2[13];
+	uint32_t var_test1=0, counter=0, max_count=0, i, j;
 
 	while(1)
 	{
+		EEPROMGet(VAR_TEST1, (uint8_t*)&var_test1);
+		EEPROMGet(VAR_TEST2, (uint8_t*)&var_test2);
+
+		sprintf(outbuff, "VAR_TEST1 read from flash: %d\r\n", (unsigned int)var_test1);
+		VCP_write(outbuff, strlen(outbuff));
+
 		counter = 0;
+
+		if(max_count == 0)
+			max_count = var_test1 + 100;
 
 		sprintf(outbuff, "\r\nSector 0:\r\n");
 		VCP_write(outbuff, strlen(outbuff));
 
-		for(i=0; i<16; i++){
-			FlashFastRead(&counter, (unsigned char*)inbuffer, sizeof(inbuffer));
+		for(j=0; j<16; j++){
+			for(i=0; i<16; i++){
+				FlashFastRead(&counter, (unsigned char*)inbuffer, sizeof(inbuffer));
 
-			memset(outbuff, 0, sizeof(outbuff));
-			sprintf(outbuff, "0x%08x ", (unsigned int)counter);
-			hex_to_ascii(inbuffer, &outbuff[strlen(outbuff)], sizeof(inbuffer));
-			sprintf(&outbuff[strlen(outbuff)], "\r\n");
-			VCP_write(outbuff, strlen(outbuff));
+				memset(outbuff, 0, sizeof(outbuff));
+				sprintf(outbuff, "0x%08x ", (unsigned int)counter);
+				hex_to_ascii(inbuffer, &outbuff[strlen(outbuff)], sizeof(inbuffer));
+				sprintf(&outbuff[strlen(outbuff)], "\r\n");
+				VCP_write(outbuff, strlen(outbuff));
 
-			counter += sizeof(inbuffer);
+				counter += sizeof(inbuffer);
+			}
 		}
 
 		counter = 0x1000;
 		sprintf(outbuff, "\r\nSector 1:\r\n");
 		VCP_write(outbuff, strlen(outbuff));
 
-		for(i=0; i<16; i++){
-			FlashFastRead(&counter, (unsigned char*)inbuffer, sizeof(inbuffer));
+		for(j=0; j<16; j++){
+			for(i=0; i<16; i++){
+				FlashFastRead(&counter, (unsigned char*)inbuffer, sizeof(inbuffer));
 
-			memset(outbuff, 0, sizeof(outbuff));
-			sprintf(outbuff, "0x%08x ", (unsigned int)counter);
-			hex_to_ascii(inbuffer, &outbuff[strlen(outbuff)], sizeof(inbuffer));
-			sprintf(&outbuff[strlen(outbuff)], "\r\n");
-			VCP_write(outbuff, strlen(outbuff));
+				memset(outbuff, 0, sizeof(outbuff));
+				sprintf(outbuff, "0x%08x ", (unsigned int)counter);
+				hex_to_ascii(inbuffer, &outbuff[strlen(outbuff)], sizeof(inbuffer));
+				sprintf(&outbuff[strlen(outbuff)], "\r\n");
+				VCP_write(outbuff, strlen(outbuff));
 
-			counter += sizeof(inbuffer);
+				counter += sizeof(inbuffer);
+			}
 		}
 
 		var_test1++;
 		EEPROMSet(VAR_TEST1, (uint8_t*)&var_test1);
 
-		if(var_test1 >= 100){
+		sprintf(var_test2, "Hallo%08x", var_test1);
+		EEPROMSet(VAR_TEST2, (uint8_t*)var_test2);
+
+		if(var_test1 >= max_count){
 			sprintf(outbuff, "\r\nTEST COMPLETE\r\n");
 			VCP_write(outbuff, strlen(outbuff));
 			break;

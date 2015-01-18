@@ -118,49 +118,107 @@ int32_t FlashFastRead(uint32_t *pointer, uint8_t *data, uint32_t length)
 
 	return 0;
 }
-
+#include <stdio.h>
+#include <string.h>
 int32_t FlashPageProgram(uint32_t *pointer, uint8_t *data, uint32_t length)
 {
-	uint32_t i=0;
-	uint8_t status1;
+	uint32_t i=0, pos=0;
 	FlashStatusRegister status;
+char outbuff[60];
+	uint32_t page_no = *pointer / 256;
+	uint32_t page_boundary = (page_no + 1) * 256;
+	uint32_t page_space = page_boundary - *pointer;
+	uint32_t write_address, write_length;
+	uint8_t multi_page_write=0;
 
-	FlashWREN();
+	sprintf(outbuff, "*pointer = %08x\r\n", (unsigned int)*pointer);
+	VCP_write(outbuff, strlen(outbuff));
 
-	while(1){
-		FlashStatus(&status, NULL, NULL);
+	sprintf(outbuff, "page_no = %d\r\n", (unsigned int)page_no);
+	VCP_write(outbuff, strlen(outbuff));
 
-		if(status.wel)
-			break;
+	sprintf(outbuff, "page_boundary = %d\r\n", (unsigned int)page_boundary);
+	VCP_write(outbuff, strlen(outbuff));
+
+	sprintf(outbuff, "page_space = %d\r\n", (unsigned int)page_space);
+	VCP_write(outbuff, strlen(outbuff));
+
+	sprintf(outbuff, "length = %d\r\n", (unsigned int)length);
+	VCP_write(outbuff, strlen(outbuff));
+
+	write_address = *pointer;
+
+	if(page_space < length){
+
+		multi_page_write = 1;
+		write_length = page_space;
+		length -= write_length;
+sprintf(outbuff, "1 address = %08x multi_page_write = 1 write_length = %d\r\n", (unsigned int)write_address, (unsigned int)write_length);
+VCP_write(outbuff, strlen(outbuff));
+	}else{
+sprintf(outbuff, "Normal write\r\n");
+VCP_write(outbuff, strlen(outbuff));
+		write_length = length;
 	}
 
-	FLASHMEM_CS_LOW();
+	do{
+		FlashWREN();
 
-	flash_mem_write(FM_CMD_PAGE_PROGRAM);
+		while(1){
+			FlashStatus(&status, NULL, NULL);
 
-	flash_mem_write((uint8_t)(*pointer >> 16));
-	flash_mem_write((uint8_t)(*pointer >> 8));
-	flash_mem_write((uint8_t)*pointer);
+			if(status.wel)
+				break;
+		}
 
-	for(i=0; i<length; i++){
-		 flash_mem_write(data[i]);
-	}
+		FLASHMEM_CS_LOW();
 
-	FLASHMEM_CS_HIGH();
+		flash_mem_write(FM_CMD_PAGE_PROGRAM);
 
-	while(1){
-		FlashStatus(&status, NULL, NULL);
+		flash_mem_write((uint8_t)(write_address >> 16));
+		flash_mem_write((uint8_t)(write_address >> 8));
+		flash_mem_write((uint8_t)write_address);
 
-		if(status.wip == 0)	// Check that no write is in progress
-			break;
-	}
+		for(i=0; i<write_length; i++){
+			 flash_mem_write(data[pos]);
+			 pos++;
+		}
+
+		FLASHMEM_CS_HIGH();
+
+		while(1){
+			FlashStatus(&status, NULL, NULL);
+
+			if(status.wip == 0)	// Check that no write is in progress
+				break;
+		}
+
+		if(multi_page_write){
+
+			if(length == 0)
+				break;
+
+			write_address += write_length;
+
+			page_no = write_address / 256;
+			page_boundary = (page_no + 1) * 256;
+			page_space = page_boundary - write_address;
+
+			if(page_space < length)
+				write_length = page_space;
+			else
+				write_length = length;
+
+			length -= write_length;
+sprintf(outbuff, "2 address = %08x write_length = %d\r\n", (unsigned int)write_address, (unsigned int)write_length);
+VCP_write(outbuff, strlen(outbuff));		}
+	}while(multi_page_write);
 
 	return 0;
 }
 
 int32_t FlashSectorErase(uint32_t *pointer)
 {
-	uint8_t status1;
 	FlashStatusRegister status;
 
 	FlashWREN();
@@ -194,7 +252,6 @@ int32_t FlashSectorErase(uint32_t *pointer)
 
 int32_t FlashChipErase(void)
 {
-	uint8_t status1;
 	FlashStatusRegister status;
 
 	FlashWREN();
