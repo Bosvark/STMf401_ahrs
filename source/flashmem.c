@@ -13,7 +13,6 @@
 #define FLASHMEM_CS_LOW()       		HAL_GPIO_WritePin(FLASHMEM_PORT, FLASHMEM_CS, GPIO_PIN_RESET)
 #define FLASHMEM_CS_HIGH()      		HAL_GPIO_WritePin(FLASHMEM_PORT, FLASHMEM_CS, GPIO_PIN_SET)
 
-
 #define FM_DUMMY				0x00
 #define FM_CMD_STATUS1			0x05
 #define FM_CMD_DEV_ID			0x9f
@@ -24,6 +23,7 @@
 #define FM_CMD_FAST_READ		0x0b
 #define FM_CMD_PAGE_PROGRAM		0x02
 #define FM_CMD_SECTOR_ERASE		0x20
+#define FM_CMD_CHIP_ERASE		0x60
 
 static SPI_HandleTypeDef FlashMemSpiHandle;
 
@@ -122,18 +122,19 @@ int32_t FlashFastRead(uint32_t *pointer, uint8_t *data, uint32_t length)
 int32_t FlashPageProgram(uint32_t *pointer, uint8_t *data, uint32_t length)
 {
 	uint32_t i=0;
+	uint8_t status1;
+	FlashStatusRegister status;
+
+	FlashWREN();
+
+	while(1){
+		FlashStatus(&status, NULL, NULL);
+
+		if(status.wel)
+			break;
+	}
 
 	FLASHMEM_CS_LOW();
-
-	// Write enable
-	flash_mem_write(FM_CMD_WREN);
-
-	// Check status
-	flash_mem_write(FM_CMD_RDSR1);
-	uint8_t status1 = flash_mem_read_write(FM_DUMMY);
-
-	if(!(status1 & 1))
-		return 1;
 
 	flash_mem_write(FM_CMD_PAGE_PROGRAM);
 
@@ -145,26 +146,29 @@ int32_t FlashPageProgram(uint32_t *pointer, uint8_t *data, uint32_t length)
 		 flash_mem_write(data[i]);
 	}
 
-	// Wait for write to finish
-	flash_mem_write(FM_CMD_RDSR1);
-	while(flash_mem_read_write(0) & 1);
-
 	FLASHMEM_CS_HIGH();
+
+	while(1){
+		FlashStatus(&status, NULL, NULL);
+
+		if(status.wip == 0)	// Check that no write is in progress
+			break;
+	}
 
 	return 0;
 }
 
 int32_t FlashSectorErase(uint32_t *pointer)
 {
+	uint8_t status1;
 	FlashStatusRegister status;
+
+	FlashWREN();
 
 	while(1){
 		FlashStatus(&status, NULL, NULL);
 
-		if(status.wel == 0)	// Check that write enable has been set
-			return -1;
-
-		if(status.wip == 0)	// Check that no write is in progress
+		if(status.wel)
 			break;
 	}
 
@@ -178,7 +182,36 @@ int32_t FlashSectorErase(uint32_t *pointer)
 
 	FLASHMEM_CS_HIGH();
 
-	// Wait for erase to complete
+	while(1){
+		FlashStatus(&status, NULL, NULL);
+
+		if(status.wip == 0)	// Check that no write is in progress
+			break;
+	}
+
+	return 0;
+}
+
+int32_t FlashChipErase(void)
+{
+	uint8_t status1;
+	FlashStatusRegister status;
+
+	FlashWREN();
+
+	while(1){
+		FlashStatus(&status, NULL, NULL);
+
+		if(status.wel)
+			break;
+	}
+
+	FLASHMEM_CS_LOW();
+
+	flash_mem_write(FM_CMD_CHIP_ERASE);
+
+	FLASHMEM_CS_HIGH();
+
 	while(1){
 		FlashStatus(&status, NULL, NULL);
 

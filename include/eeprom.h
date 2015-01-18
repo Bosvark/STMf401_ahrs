@@ -3,7 +3,16 @@
 
 #include "stm32f4xx_hal.h"
 
+typedef enum
+{
+	VAR_TEST1=1,
+	VAR_TEST2,
+	VAR_THE_END			// This value indicates the end of the list. Do not allocate values after it.
+}VARIABLE;
+
 uint32_t EEPROMInit(void);
+int32_t EEPROMGet(VARIABLE varid, uint8_t *data);
+int32_t EEPROMSet(VARIABLE varid, uint8_t *data);
 uint32_t EEPROMRead(uint32_t virtual_address, uint8_t *data);
 uint32_t EEPROMWrite(uint32_t virtual_address, uint8_t *data, uint32_t length);
 

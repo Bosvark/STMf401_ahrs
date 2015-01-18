@@ -14,6 +14,7 @@
 #include "esc.h"
 #include "timer.h"
 #include "altitude.h"
+#include "eeprom.h"
 #include "flashmem.h"
 #include "pid.h"
 
@@ -75,17 +76,17 @@ void armed_process(PwmInfo *pwm);
 void version(void);
 void imu_raw(void);
 void imu_base_int(char count);
-
+/*
 void FlashTest(void)
 {
 	char outbuff[60];
 	uint8_t id=0, mem_type=0, capacity=0;
 	FlashStatusRegister status;
-/*
+
 	FlashWREN();
 	FlashPageProgram(0, "Hello World!\0", 13);
 	FlashWRDI();
-*/
+
 	while(1){
 		FlashMemChipID(&id, &mem_type, &capacity);
 		sprintf(outbuff, "FlashMemChipID id:0x%02x mem_type:0x%02x capacity:0x%02x\r\n", id, mem_type, capacity);
@@ -109,7 +110,112 @@ void FlashTest(void)
 		HAL_Delay(1000);
 	}
 }
+*/
 
+void EEPROM_Test(void){
+	char outbuff[60];
+	uint8_t inbuffer[16];
+	uint32_t var_test1=0, counter=0, i;
+
+	while(1)
+	{
+		counter = 0;
+
+		sprintf(outbuff, "\r\nSector 0:\r\n");
+		VCP_write(outbuff, strlen(outbuff));
+
+		for(i=0; i<16; i++){
+			FlashFastRead(&counter, (unsigned char*)inbuffer, sizeof(inbuffer));
+
+			memset(outbuff, 0, sizeof(outbuff));
+			sprintf(outbuff, "0x%08x ", (unsigned int)counter);
+			hex_to_ascii(inbuffer, &outbuff[strlen(outbuff)], sizeof(inbuffer));
+			sprintf(&outbuff[strlen(outbuff)], "\r\n");
+			VCP_write(outbuff, strlen(outbuff));
+
+			counter += sizeof(inbuffer);
+		}
+
+		counter = 0x1000;
+		sprintf(outbuff, "\r\nSector 1:\r\n");
+		VCP_write(outbuff, strlen(outbuff));
+
+		for(i=0; i<16; i++){
+			FlashFastRead(&counter, (unsigned char*)inbuffer, sizeof(inbuffer));
+
+			memset(outbuff, 0, sizeof(outbuff));
+			sprintf(outbuff, "0x%08x ", (unsigned int)counter);
+			hex_to_ascii(inbuffer, &outbuff[strlen(outbuff)], sizeof(inbuffer));
+			sprintf(&outbuff[strlen(outbuff)], "\r\n");
+			VCP_write(outbuff, strlen(outbuff));
+
+			counter += sizeof(inbuffer);
+		}
+
+		var_test1++;
+		EEPROMSet(VAR_TEST1, (uint8_t*)&var_test1);
+
+		if(var_test1 >= 100){
+			sprintf(outbuff, "\r\nTEST COMPLETE\r\n");
+			VCP_write(outbuff, strlen(outbuff));
+			break;
+		}
+
+//		HAL_Delay(1000);
+	}
+
+	while(1);
+}
+/*
+typedef enum
+{
+	START,
+	CMD,
+	ADDR,
+	VAL,
+	GO
+}STATE;
+void command(void)
+{
+	char in, cmd, value[30];
+	uint32_t addr;
+	STATE state = START;
+	int counter=0;
+
+	while(1){
+		VCP_read(&in, 1);
+
+		switch(state)
+		{
+			case START:
+				if(in == 0x08)	// backspace
+					break;
+
+				cmd = in;
+				addr = 0;
+				counter = 4;
+				memset(value, 0, sizeof(value));
+
+				state = CMD;
+			case CMD:
+				if(in == 0x08){	// backspace
+					if(counter == 0)
+						state = START;
+					else
+						counter--;
+
+					break;
+				}
+
+				if(cmd == 's'){		// Sector erase
+					addr |= (uint32_t)(in << counter++);
+				}
+			case ADDR:
+			case VAL:
+		}
+	}
+}
+*/
 int main(void)
 {
 	char outbuff[60];
@@ -124,12 +230,45 @@ int main(void)
 
 	SystemClock_Config();
 
+	USBD_Init(&USBD_Device, &VCP_Desc, 0);
+
+	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
+	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
+	USBD_Start(&USBD_Device);
+
 	ExpLedInit();
 	ExpBuzzerInit();
 //	EXTILine0_Config();
 
+	ExpBuzzerOff();
+
 	BSP_LED_On(LED3);
 
+	{
+		char in[5];
+		in[0] = 0;
+
+		while(1){
+			VCP_read(in, 5);
+
+			if(memcmp(in , "go", 2) == 0){
+				VCP_write("Ok\r\n", 4);
+				break;
+			}
+		}
+
+	}
+
+	if(EEPROMInit() < 0){
+		ExpLedOn(RED_LED);
+
+		while(1){
+			ExpBuzzerToggle();
+			HAL_Delay(300);
+		}
+	}
+ExpLedOn(GREEN_LED);
+EEPROM_Test();
 	BSP_GYRO_Init();
 	if(BSP_ACCELERO_Init() != ACCELERO_OK)
 		BSP_LED_On(LED3);
@@ -142,19 +281,9 @@ int main(void)
 	zero_gyro();
 	zero_mag();
 
-	USBD_Init(&USBD_Device, &VCP_Desc, 0);
-
-	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
-	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_Template_fops);
-	USBD_Start(&USBD_Device);
-
-	ExpBuzzerOff();
-
 	TIM_Config();
 	ESC_Init();
 	AltInit();
-	FlashMemInit();
-FlashTest();
 
 	PIDInit();
 

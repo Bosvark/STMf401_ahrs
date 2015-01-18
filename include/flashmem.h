@@ -26,5 +26,6 @@ int32_t FlashFastRead(uint32_t *pointer, uint8_t *data, uint32_t length);
 int32_t FlashPageProgram(uint32_t *pointer, uint8_t *data, uint32_t length);
 void FlashStatus(FlashStatusRegister *stat, uint8_t *rdsr1, uint8_t *rdsr2);
 int32_t FlashSectorErase(uint32_t *pointer);
+int32_t FlashChipErase(void);
 
 #endif // _FLASHMEM_H_
