@@ -111,7 +111,7 @@ void FlashTest(void)
 	}
 }
 */
-
+/*
 void EEPROM_Test(void){
 	char outbuff[60];
 	uint8_t inbuffer[16], var_test2[13];
@@ -182,6 +182,7 @@ void EEPROM_Test(void){
 
 	while(1);
 }
+*/
 /*
 typedef enum
 {
@@ -283,8 +284,7 @@ int main(void)
 			HAL_Delay(300);
 		}
 	}
-ExpLedOn(GREEN_LED);
-EEPROM_Test();
+
 	BSP_GYRO_Init();
 	if(BSP_ACCELERO_Init() != ACCELERO_OK)
 		BSP_LED_On(LED3);
