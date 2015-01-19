@@ -66,7 +66,7 @@ uint32_t EEPROMInit(void)
 	if(id != 0x37 || mem_type != 0x30 || capacity != 0x16)
 		return -1;
 
-	FlashChipErase();
+//	FlashChipErase();
 
 	return eeprom_find_valid_sector();
 }
