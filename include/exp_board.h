@@ -18,10 +18,18 @@ void ExpLedOn(int led);
 void ExpLedOff(int led);
 void ExpLedToggle(int led);
 
+typedef enum
+{
+	BUZZER_2_SHORTS,
+	BUZZER_2_LONGS
+}BUZZER_TUNE;
+
 void ExpBuzzerInit(void);
 void ExpBuzzerOn(void);
 void ExpBuzzerOff(void);
 void ExpBuzzerToggle(void);
+void ExpBuzzerTune(BUZZER_TUNE tune);
+void ExpBuzzerHandler(void);
 
 //
 ///////////////////////////////////////////////////////////////////
@@ -62,6 +70,13 @@ typedef struct
 	uint32_t pwmval3;
 	uint32_t pwmval4;
 }PwmInfo;
+
+// Default ranges for upper and lower rx limits
+#define RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH	2000
+#define RX_CHAN_DEFAULT_UPPER_LIMIT_LOW		1850
+#define RX_CHAN_DEFAULT_LOWER_LIMIT_HIGH	1150
+#define RX_CHAN_DEFAULT_LOWER_LIMIT_LOW		1000
+#define RX_CHAN_DEFAULT_MIDPOINT			1500
 
 void TIM_Config(void);
 int GetPwmInfo(PwmInfo *pwm);

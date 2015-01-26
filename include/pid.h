@@ -31,13 +31,11 @@ typedef struct PID
 	int16_t vl_PreU;
 }PID;
 
+PID PIDYaw;
+PID PIDRoll;
+PID PIDPitch;
 
 void PIDInit(void);
-int16_t V_PIDCalc(PID *pp);
-
-//extern
-extern PID sPID;
-extern PID sPID_1;
-extern PID sPID_2;
+int16_t PIDCalc(PID *pp);
 
 #endif /* __SCHEDULE_H__ */

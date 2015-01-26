@@ -2,6 +2,8 @@
 #include "stm32f4xx_hal_tim.h"
 #include "exp_board.h"
 
+volatile PwmInfo rx_channel;
+
 void ExpLedInit(void)
 {
 	GPIO_InitTypeDef  GPIO_InitStruct;
@@ -67,6 +69,54 @@ void ExpBuzzerOff(void)
 void ExpBuzzerToggle(void)
 {
 	HAL_GPIO_TogglePin(BUZZER_PORT, BUZZER);
+}
+
+static const uint32_t buzzer_1_1[]={300, 300, 300, 0};
+static const uint32_t buzzer_2_2[]={600, 600, 600, 0};
+uint32_t *buzz=NULL;
+static uint8_t buzz_pos=0;
+uint32_t beat=0;
+
+void ExpBuzzerTune(BUZZER_TUNE tune)
+{
+	switch(tune)
+	{
+		case BUZZER_2_SHORTS:
+			buzz = (uint32_t*)buzzer_1_1;
+			break;
+		case BUZZER_2_LONGS:
+			buzz = (uint32_t*)buzzer_2_2;
+			break;
+		default:
+			return;
+	}
+
+	buzz_pos = 0;
+	beat = HAL_GetTick() + buzz[buzz_pos++];
+	ExpBuzzerOn();
+}
+
+void ExpBuzzerHandler(void)
+{
+	if(buzz == NULL){
+		return;			// Nothing to do
+	}
+
+	uint32_t time = HAL_GetTick();
+
+	if((beat > 0) && (time > beat)){
+		ExpBuzzerToggle();
+
+		if(buzz[buzz_pos] == 0){
+			ExpBuzzerOff();
+
+			buzz = NULL;
+			buzz_pos = 0;
+			beat = 0;
+			return;
+		}else
+			beat = time + buzz[buzz_pos++];
+	}
 }
 
 void EXTILine0_Config(void)
@@ -235,7 +285,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			intflag4 = 1;
 		}
 
-		ExpLedToggle(GREEN_LED);
+//		ExpLedToggle(GREEN_LED);
 	}
 }
 
@@ -258,7 +308,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		if(RC2_tn < RC2_tn_1)
 			pwm->pwmval2 = RC2_tn_1 - RC2_tn;
 		else
-			pwm->pwmval2 = (0xffffffff - RC2_tn + RC2_tn_1);
+			pwm->pwmval3 = (0xffffffff - RC2_tn + RC2_tn_1);
 
 		pwm->dutyCycle2 = (pwm->pwmval2 * 100) / RC2_tn_1;
 
@@ -295,7 +345,83 @@ int GetPwmInfo(PwmInfo *pwm)
 
 	return 1;
 }
+/*
+int GetPwmInfo(PwmInfo *pwm)
+{
+	uint32_t pwmval=0;
 
+	if(intflag1 > 0){
+		if(RC1_tn < RC1_tn_1)
+			pwmval = RC1_tn_1 - RC1_tn;
+		else
+			pwmval = (0xffffffff - RC1_tn + RC1_tn_1);
+
+//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH) && (RC1_tn_1 != 0))
+		{
+			pwm->pwmval1 = pwmval;
+			pwm->dutyCycle1 = (pwm->pwmval1 * 100) / RC1_tn_1;
+		}
+
+		RC1_tn = 0;
+		RC1_tn_1 = 0;
+		intflag1 = 0;
+	}
+
+	if(intflag2 > 0){
+		if(RC2_tn < RC2_tn_1)
+			pwmval = RC2_tn_1 - RC2_tn;
+		else
+			pwmval = (0xffffffff - RC2_tn + RC2_tn_1);
+
+//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval < RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
+		{
+			pwm->pwmval2 = pwmval;
+			pwm->dutyCycle2 = (pwm->pwmval2 * 100) / RC2_tn_1;
+		}
+
+		RC2_tn = 0;
+		RC2_tn_1 = 0;
+		intflag2 = 0;
+	}
+
+	if(intflag3 > 0){
+		if(RC3_tn < RC3_tn_1)
+			pwmval = RC3_tn_1 - RC3_tn;
+		else
+			pwmval = (0xffffffff - RC3_tn + RC3_tn_1);
+
+//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
+		{
+			pwm->pwmval3 = pwmval;
+			pwm->dutyCycle3 = (pwm->pwmval3 * 100) / RC3_tn_1;
+		}
+
+		RC3_tn = 0;
+		RC3_tn_1 = 0;
+		intflag3 = 0;
+	}
+
+	if(intflag4 > 0){
+		if(RC4_tn < RC4_tn_1)
+			pwmval = RC4_tn_1 - RC4_tn;
+		else
+			pwmval = (0xffffffff - RC4_tn + RC4_tn_1);
+
+//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
+		{
+			pwm->pwmval4 = pwmval;
+			pwm->dutyCycle4 = (pwm->pwmval4 * 100) / RC4_tn_1;
+		}
+
+		RC4_tn = 0;
+		RC4_tn_1 = 0;
+		intflag4 = 0;
+	}
+
+	return 1;
+}
+
+ */
 void HAL_TIM_IC_MspInit(TIM_HandleTypeDef *htim)
 {
   GPIO_InitTypeDef   GPIO_InitStruct;

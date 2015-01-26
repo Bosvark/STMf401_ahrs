@@ -163,12 +163,13 @@ static int8_t TEMPLATE_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
   case CDC_SET_LINE_CODING:
+/*
     linecoding.bitrate    = (uint32_t)(pbuf[0] | (pbuf[1] << 8) |\
                             (pbuf[2] << 16) | (pbuf[3] << 24));
     linecoding.format     = pbuf[4];
     linecoding.paritytype = pbuf[5];
     linecoding.datatype   = pbuf[6];
-    
+ */
     /* Add your code here */
     break;
 

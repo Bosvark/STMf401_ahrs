@@ -1,49 +1,45 @@
 #include "pid.h"
 
-PID sPID;
-PID sPID_1;
-PID sPID_2;
-
 void PIDInit(void)
 {
-    sPID.vi_Ref = 0 ;
-    sPID.vi_FeedBack = 0 ;
+	PIDYaw.vi_Ref = 0 ;
+	PIDYaw.vi_FeedBack = 0 ;
 
-    sPID.vi_PreError = 0 ;
-    sPID.vi_PreDerror = 0 ;
+	PIDYaw.vi_PreError = 0 ;
+	PIDYaw.vi_PreDerror = 0 ;
 
-    sPID.v_Kp = SPEED_KP;
-    sPID.v_Ki = SPEED_KI;
-    sPID.v_Kd = SPEED_KD;
+	PIDYaw.v_Kp = SPEED_KP;
+	PIDYaw.v_Ki = SPEED_KI;
+	PIDYaw.v_Kd = SPEED_KD;
 
-    sPID.vl_PreU = 0;
+	PIDYaw.vl_PreU = 0;
   /*********************************************/
-    sPID_1.vi_Ref = 0 ;
-    sPID_1.vi_FeedBack = 0 ;
+	PIDRoll.vi_Ref = 0 ;
+	PIDRoll.vi_FeedBack = 0 ;
 
-    sPID_1.vi_PreError = 0 ;
-    sPID_1.vi_PreDerror = 0 ;
+	PIDRoll.vi_PreError = 0 ;
+	PIDRoll.vi_PreDerror = 0 ;
 
-    sPID_1.v_Kp = SPEED_KP_1;
-    sPID_1.v_Ki = SPEED_KI_1;
-    sPID_1.v_Kd = SPEED_KD_1;
+	PIDRoll.v_Kp = SPEED_KP_1;
+	PIDRoll.v_Ki = SPEED_KI_1;
+	PIDRoll.v_Kd = SPEED_KD_1;
 
-    sPID_1.vl_PreU = 0;
+	PIDRoll.vl_PreU = 0;
    /*********************************************/
-    sPID_2.vi_Ref = 0 ;
-    sPID_2.vi_FeedBack = 0 ;
+	PIDPitch.vi_Ref = 0 ;
+	PIDPitch.vi_FeedBack = 0 ;
 
-    sPID_2.vi_PreError = 0 ;
-    sPID_2.vi_PreDerror = 0 ;
+	PIDPitch.vi_PreError = 0 ;
+	PIDPitch.vi_PreDerror = 0 ;
 
-    sPID_2.v_Kp = SPEED_KP_2;
-    sPID_2.v_Ki = SPEED_KI_2;
-    sPID_2.v_Kd = SPEED_KD_2;
+	PIDPitch.v_Kp = SPEED_KP_2;
+	PIDPitch.v_Ki = SPEED_KI_2;
+	PIDPitch.v_Kd = SPEED_KD_2;
 
-    sPID_2.vl_PreU = 0;
+	PIDPitch.vl_PreU = 0;
 }
 
-int16_t V_PIDCalc(PID *pp)
+int16_t PIDCalc(PID *pp)
 {
 	int16_t  error,d_error,dd_error;
 
