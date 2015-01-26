@@ -291,64 +291,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 int GetPwmInfo(PwmInfo *pwm)
 {
-	if(intflag1 > 0){
-		if(RC1_tn < RC1_tn_1)
-			pwm->pwmval1 = RC1_tn_1 - RC1_tn;
-		else
-			pwm->pwmval1 = (0xffffffff - RC1_tn + RC1_tn_1);
-
-		pwm->dutyCycle1 = (pwm->pwmval1 * 100) / RC1_tn_1;
-
-		RC1_tn = 0;
-		RC1_tn_1 = 0;
-		intflag1 = 0;
-	}
-
-	if(intflag2 > 0){
-		if(RC2_tn < RC2_tn_1)
-			pwm->pwmval2 = RC2_tn_1 - RC2_tn;
-		else
-			pwm->pwmval3 = (0xffffffff - RC2_tn + RC2_tn_1);
-
-		pwm->dutyCycle2 = (pwm->pwmval2 * 100) / RC2_tn_1;
-
-		RC2_tn = 0;
-		RC2_tn_1 = 0;
-		intflag2 = 0;
-	}
-
-	if(intflag3 > 0){
-		if(RC3_tn < RC3_tn_1)
-			pwm->pwmval3 = RC3_tn_1 - RC3_tn;
-		else
-			pwm->pwmval3 = (0xffffffff - RC3_tn + RC3_tn_1);
-
-		pwm->dutyCycle3 = (pwm->pwmval3 * 100) / RC3_tn_1;
-
-		RC3_tn = 0;
-		RC3_tn_1 = 0;
-		intflag3 = 0;
-	}
-
-	if(intflag4 > 0){
-		if(RC4_tn < RC4_tn_1)
-			pwm->pwmval4 = RC4_tn_1 - RC4_tn;
-		else
-			pwm->pwmval4 = (0xffffffff - RC4_tn + RC4_tn_1);
-
-		pwm->dutyCycle4 = (pwm->pwmval4 * 100) / RC4_tn_1;
-
-		RC4_tn = 0;
-		RC4_tn_1 = 0;
-		intflag4 = 0;
-	}
-
-	return 1;
-}
-/*
-int GetPwmInfo(PwmInfo *pwm)
-{
-	uint32_t pwmval=0;
+	uint32_t pwmval;
 
 	if(intflag1 > 0){
 		if(RC1_tn < RC1_tn_1)
@@ -356,8 +299,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		else
 			pwmval = (0xffffffff - RC1_tn + RC1_tn_1);
 
-//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH) && (RC1_tn_1 != 0))
-		{
+		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH) && (RC1_tn_1 != 0)){
 			pwm->pwmval1 = pwmval;
 			pwm->dutyCycle1 = (pwm->pwmval1 * 100) / RC1_tn_1;
 		}
@@ -373,10 +315,9 @@ int GetPwmInfo(PwmInfo *pwm)
 		else
 			pwmval = (0xffffffff - RC2_tn + RC2_tn_1);
 
-//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval < RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
-		{
-			pwm->pwmval2 = pwmval;
-			pwm->dutyCycle2 = (pwm->pwmval2 * 100) / RC2_tn_1;
+		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH) && (RC3_tn_1 != 0)){
+			pwm->pwmval3 = pwmval;
+			pwm->dutyCycle3 = (pwm->pwmval3 * 100) / RC3_tn_1;
 		}
 
 		RC2_tn = 0;
@@ -390,8 +331,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		else
 			pwmval = (0xffffffff - RC3_tn + RC3_tn_1);
 
-//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
-		{
+		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH) && (RC3_tn_1 != 0)){
 			pwm->pwmval3 = pwmval;
 			pwm->dutyCycle3 = (pwm->pwmval3 * 100) / RC3_tn_1;
 		}
@@ -407,8 +347,7 @@ int GetPwmInfo(PwmInfo *pwm)
 		else
 			pwmval = (0xffffffff - RC4_tn + RC4_tn_1);
 
-//		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
-		{
+		if((pwmval > RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (pwmval <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH) && (RC4_tn_1 != 0)){
 			pwm->pwmval4 = pwmval;
 			pwm->dutyCycle4 = (pwm->pwmval4 * 100) / RC4_tn_1;
 		}
@@ -421,7 +360,6 @@ int GetPwmInfo(PwmInfo *pwm)
 	return 1;
 }
 
- */
 void HAL_TIM_IC_MspInit(TIM_HandleTypeDef *htim)
 {
   GPIO_InitTypeDef   GPIO_InitStruct;
