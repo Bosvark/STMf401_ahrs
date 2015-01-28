@@ -50,7 +50,7 @@ typedef struct
 }VarDef;
 
 VarDef vardefs[]={{0,0,0},
-		{VAR_TEST1, 0, sizeof(uint32_t)},
+		{VAR_CALIBRATION, 0, sizeof(CalibVals)},
 		{VAR_TEST2, 0, 13}
 };
 

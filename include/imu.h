@@ -7,9 +7,6 @@
 
 #define CALIBRATION_MAGIC_NO	89674523.0
 
-static float gyro_offs_xyz[3];
-static float gyro_noise_xyz[3];
-
 #define GYRO_ZERO_SAMPLES	10000.0
 #define MAG_ZERO_SAMPLES	10000.0
 

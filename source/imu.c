@@ -12,7 +12,10 @@ static char filter_init=0;
 static float comp_pitch=0;
 static float comp_roll=0;
 static float comp_yaw=0;
-float previous_time=0;
+static float previous_time=0;
+
+static float gyro_offs_xyz[3];
+static float gyro_noise_xyz[3];
 
 void ImuInit(void)
 {
@@ -96,9 +99,9 @@ void gyro_read(Point3df *xyz)
 
 	BSP_GYRO_GetXYZ(gyro_xyz);
 
-	xyz->x = gyro_xyz[0];// - gyro_offs_xyz[0];
-	xyz->y = gyro_xyz[1];// - gyro_offs_xyz[1];
-	xyz->z = gyro_xyz[2];// - gyro_offs_xyz[2];
+	xyz->x = gyro_xyz[0] - gyro_offs_xyz[0];
+	xyz->y = gyro_xyz[1] - gyro_offs_xyz[1];
+	xyz->z = gyro_xyz[2] - gyro_offs_xyz[2];
 
 }
 
@@ -202,14 +205,15 @@ void zero_mag(void)
 	mag_offs.x = mag_offs.x / MAG_ZERO_SAMPLES;
 	mag_offs.y = mag_offs.y / MAG_ZERO_SAMPLES;
 	mag_offs.z = mag_offs.z / MAG_ZERO_SAMPLES;
-#endif
+#else
+	mag_offs_min.x = -254;
+	mag_offs_min.y = -357;
+	mag_offs_min.z = -222;
+	mag_offs_max.x = 267;
+	mag_offs_max.y = 204;
+	mag_offs_max.z = 235;
 
-mag_offs_min.x = -254;
-mag_offs_min.y = -357;
-mag_offs_min.z = -222;
-mag_offs_max.x = 267;
-mag_offs_max.y = 204;
-mag_offs_max.z = 235;
+#endif
 }
 
 void MagPointRaw(Point3df *magpoint)
@@ -245,9 +249,9 @@ void MagPointRaw(Point3df *magpoint)
 float MagHeading(Point3df *magpoint, Point3df *accpoint)
 {
 	// use calibration values to shift and scale magnetometer measurements
-	float Magx = ((magpoint->x-mag_offs_min.x)/(mag_offs_max.x-mag_offs_min.x)*2-1);// - mag_offs.x;
-	float Magy = ((magpoint->y-mag_offs_min.y)/(mag_offs_max.y-mag_offs_min.y)*2-1);// - mag_offs.y;
-	float Magz = ((magpoint->z-mag_offs_min.z)/(mag_offs_max.z-mag_offs_min.z)*2-1);// - mag_offs.z;
+	float Magx = ((magpoint->x-mag_offs_min.x)/(mag_offs_max.x-mag_offs_min.x)*2-1) - mag_offs.x;
+	float Magy = ((magpoint->y-mag_offs_min.y)/(mag_offs_max.y-mag_offs_min.y)*2-1) - mag_offs.y;
+	float Magz = ((magpoint->z-mag_offs_min.z)/(mag_offs_max.z-mag_offs_min.z)*2-1) - mag_offs.z;
 
 	// Normalize acceleration measurements so they range from 0 to 1
 	float accxnorm = accpoint->x/sqrtf(accpoint->x*accpoint->x+accpoint->y*accpoint->y+accpoint->z*accpoint->z);

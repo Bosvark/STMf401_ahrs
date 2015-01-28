@@ -15,6 +15,8 @@
 #include "flashmem.h"
 #include "pid.h"
 #include "imu.h"
+#include "FreeIMU_serial.h"
+#include "utils.h"
 
 #define DEBUG_ON
 
@@ -30,7 +32,6 @@ static char calibrating_flag = 0;
 
 extern PwmInfo rx_channel;
 
-void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length);
 static void SystemClock_Config(void);
 
 void unarmed_process(PwmInfo *pwm);
@@ -195,6 +196,25 @@ void command(void)
 	}
 }
 */
+
+void freeimu(void)
+{
+	static FreeIMU_Func fimu_funcs;
+
+	fimu_funcs.GetVersion = &FreeIMUVersion;
+	fimu_funcs.GetIMURaw = &FreeIMURaw;
+	fimu_funcs.GetBaseValues = &FreeIMUBaseInt;
+//	fimu_funcs.GetQuat = &send_quaternion;
+	fimu_funcs.GetAttitude = &FreeIMUSendYawPitchRoll;
+	fimu_funcs.LoadCalibrationValues = &FreeIMUReadCalibration;
+	fimu_funcs.Calibrate = &FreeIMUWriteCalibration;
+	fimu_funcs.ClearCalibration = &FreeIMUClearCalibration;
+
+	for(;;){
+		FreeIMU_serial(&fimu_funcs);
+	}
+}
+
 int main(void)
 {
 	char outbuff[100];
@@ -248,8 +268,10 @@ int main(void)
 		}
 	}
 
-	ImuInit();
+	ExpLedOn(RED_LED);
+	ExpLedOn(ORANGE_LED);
 
+	ImuInit();
 	TIM_Config();
 	ESC_Init();
 	AltInit();
@@ -261,6 +283,9 @@ int main(void)
 	ESC_Start(3);
 	ESC_Start(4);
 
+	ExpLedOff(RED_LED);
+	ExpLedOff(ORANGE_LED);
+
 #define RX_TIME			3
 #define COMMS_TIME		10
 
@@ -268,15 +293,12 @@ int main(void)
 	uint32_t rx_time = current + 500;
 	uint32_t comms_time = current + COMMS_TIME;		// Update comms every 100ms
 
-	int motorspeed = 1000;
-	int speed_step = 1;
-
-	float min=100.0, max=-100.0;
-
 	memset(&rx_channel, 0, sizeof(PwmInfo));
 
-
+freeimu();
 	for(;;){
+
+		current = HAL_GetTick();
 
 		if(current > rx_time)
 			break;
@@ -709,24 +731,6 @@ void imu_base_int(char count)
 
 }
 
-
-const char    hexlookup[] = {"0123456789ABCDEF"};
-
-void hex_to_ascii(const unsigned char *source, char *dest, unsigned int source_length)
-{
-	unsigned int i;
-	unsigned char temp;
-
-	for (i = 0; i < source_length; i++) {
-		temp = source[i];
-		temp >>= 4;
-		dest[i*2] = hexlookup[temp];
-
-		temp = source[i];
-		temp &= 0x0f;
-		dest[(i*2)+1] = hexlookup[temp];
-	}
-}
 
 /**
   * @brief  System Clock Configuration

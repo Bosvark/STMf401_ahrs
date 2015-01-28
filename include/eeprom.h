@@ -3,9 +3,15 @@
 
 #include "stm32f4xx_hal.h"
 
+typedef struct
+{
+	uint16_t offsets[6];
+	float scales[6];
+}__attribute__((packed))CalibVals;
+
 typedef enum
 {
-	VAR_TEST1=1,
+	VAR_CALIBRATION=1,
 	VAR_TEST2,
 	VAR_THE_END			// This value indicates the end of the list. Do not allocate values after it.
 }VARIABLE;
