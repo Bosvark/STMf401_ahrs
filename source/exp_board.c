@@ -71,8 +71,12 @@ void ExpBuzzerToggle(void)
 	HAL_GPIO_TogglePin(BUZZER_PORT, BUZZER);
 }
 
-static const uint32_t buzzer_1_1[]={300, 300, 300, 0};
-static const uint32_t buzzer_2_2[]={600, 600, 600, 0};
+#define BEAT_ONE		300
+#define BEAT_TWO		600
+
+static const uint32_t buzzer_1_1[]={BEAT_ONE, BEAT_ONE, BEAT_ONE, 0};
+static const uint32_t buzzer_2_2[]={BEAT_TWO, BEAT_TWO, BEAT_TWO, 0};
+static const uint32_t buzzer_1_1_2[]={BEAT_ONE, BEAT_ONE, BEAT_ONE, BEAT_ONE, BEAT_TWO, 0};
 uint32_t *buzz=NULL;
 static uint8_t buzz_pos=0;
 uint32_t beat=0;
@@ -86,6 +90,9 @@ void ExpBuzzerTune(BUZZER_TUNE tune)
 			break;
 		case BUZZER_2_LONGS:
 			buzz = (uint32_t*)buzzer_2_2;
+			break;
+		case BUZZER_CALIBRATION_START:
+			buzz = (uint32_t*)buzzer_1_1_2;
 			break;
 		default:
 			return;

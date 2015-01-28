@@ -21,7 +21,8 @@ void ExpLedToggle(int led);
 typedef enum
 {
 	BUZZER_2_SHORTS,
-	BUZZER_2_LONGS
+	BUZZER_2_LONGS,
+	BUZZER_CALIBRATION_START
 }BUZZER_TUNE;
 
 void ExpBuzzerInit(void);

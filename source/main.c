@@ -26,6 +26,7 @@
 USBD_HandleTypeDef USBD_Device;
 
 static char armed_flag = 0;
+static char calibrating_flag = 0;
 
 extern PwmInfo rx_channel;
 
@@ -254,11 +255,17 @@ int main(void)
 	AltInit();
 
 	PIDInit();
+
+	ESC_Start(1);
+	ESC_Start(2);
+	ESC_Start(3);
+	ESC_Start(4);
+
 #define RX_TIME			3
 #define COMMS_TIME		10
 
 	uint32_t current = HAL_GetTick();
-	uint32_t rx_time = current + RX_TIME;			// Check receiver every 30ms
+	uint32_t rx_time = current + 500;
 	uint32_t comms_time = current + COMMS_TIME;		// Update comms every 100ms
 
 	int motorspeed = 1000;
@@ -267,6 +274,28 @@ int main(void)
 	float min=100.0, max=-100.0;
 
 	memset(&rx_channel, 0, sizeof(PwmInfo));
+
+
+	for(;;){
+
+		if(current > rx_time)
+			break;
+
+		// Check for high throttle on startup, indicates ESC calibration
+		GetPwmInfo(&rx_channel);
+
+		if((rx_channel.pwmval3 >= RX_CHAN_DEFAULT_UPPER_LIMIT_LOW) && (rx_channel.pwmval3 <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH)){
+			// Throttle is max
+			calibrating_flag = 1;
+			ExpLedOn(ORANGE_LED);
+
+			ExpBuzzerTune(BUZZER_CALIBRATION_START);
+
+			break;
+		}
+	}
+
+	rx_time = current + RX_TIME;			// Check receiver every 30ms
 
 	for(;;){
 		ExpBuzzerHandler();
@@ -283,14 +312,17 @@ int main(void)
 
 			if((rx_channel.pwmval3 >= RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (rx_channel.pwmval3 <= RX_CHAN_DEFAULT_LOWER_LIMIT_HIGH)
 					&& (rx_channel.pwmval4 >= RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (rx_channel.pwmval4 <= RX_CHAN_DEFAULT_LOWER_LIMIT_HIGH)
-					&& (armed_flag == 1)){
+					&& ((armed_flag == 1) || (calibrating_flag == 1))){
 				// Throttle is lower left corner
 				armed_flag = 0;
+				calibrating_flag = 0;
+
+				ExpLedOff(ORANGE_LED);
 
 				ExpBuzzerTune(BUZZER_2_LONGS);
 			}else if((rx_channel.pwmval3 >= RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (rx_channel.pwmval3 <= RX_CHAN_DEFAULT_LOWER_LIMIT_HIGH)
 					&& (rx_channel.pwmval4 >= RX_CHAN_DEFAULT_UPPER_LIMIT_LOW) && (rx_channel.pwmval4 <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH)
-					&& (armed_flag == 0)){
+					&& (armed_flag == 0) && (calibrating_flag == 0)){
 				// Throttle is lower right corner
 				armed_flag = 1;
 
@@ -299,17 +331,6 @@ int main(void)
 
 			// Update loop time
 			rx_time = HAL_GetTick() + RX_TIME;
-		}
-
-		if(current > comms_time)
-		{
-
-//			sprintf(outbuff, "Armed %d Roll: %04d min: %04d max: %04d Throttle: %04d kP: %04d\r\n", (int)armed_flag, (int)roll, (int)min, (int)max, (int)rcinfo.pwmval3, (int)((rcinfo.pwmval1 - 1100)/25));
-			sprintf(outbuff, "Armed %d Throttle: %04d Rudder: %04d kP: %04d\r\n", (int)armed_flag, (int)rx_channel.pwmval3, (int)rx_channel.pwmval4, (int)((rx_channel.pwmval1 - 1100)/25));
-			VCP_write(outbuff, strlen(outbuff));
-
-			// Update loop time
-			comms_time = HAL_GetTick() + COMMS_TIME;
 		}
 
 		if(!armed_flag){
@@ -327,29 +348,42 @@ int main(void)
 
 		if(armed_flag){
 			ExpLedOn(GREEN_LED);
-/*
-			//
-			// SAFETY FIRST!!!
-			//
+
 			// Apply throttle
-			if((rx_channel.pwmval3 >= RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (rx_channel.pwmval3 <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH)){
-				motor_speed.motor1 = rx_channel.pwmval3;
-				motor_speed.motor2 = rx_channel.pwmval3;
-				motor_speed.motor3 = rx_channel.pwmval3;
-				motor_speed.motor4 = rx_channel.pwmval3;
-			}
 
-			if((rx_channel.pwmval1 >= RX_CHAN_DEFAULT_LOWER_LIMIT_LOW) && (rx_channel.pwmval1 <= RX_CHAN_DEFAULT_UPPER_LIMIT_HIGH))
-				PIDRoll.v_Kp = (rx_channel.pwmval1 - 1100)/25;
-
+			PIDRoll.v_Kp = (rx_channel.pwmval1 - 1100)/25;
 			PIDRoll.vi_Ref = 0;
 			PIDRoll.vi_FeedBack = roll;
 			PIDRoll.vl_PreU = PIDCalc(&PIDRoll);
 
+			motor_speed.motor1 = rx_channel.pwmval3 - PIDRoll.vl_PreU;
+			motor_speed.motor2 = rx_channel.pwmval3 + PIDRoll.vl_PreU;
+
 			ESC_Update();
-*/
+
 		}
 
+		if(calibrating_flag){
+			motor_speed.motor1 = rx_channel.pwmval3;
+			motor_speed.motor2 = rx_channel.pwmval3;
+			motor_speed.motor3 = rx_channel.pwmval3;
+			motor_speed.motor4 = rx_channel.pwmval3;
+
+			ESC_Update();
+
+		}
+
+		if(current > comms_time)
+		{
+
+//			sprintf(outbuff, "Armed %d Roll: %04d min: %04d max: %04d Throttle: %04d kP: %04d\r\n", (int)armed_flag, (int)roll, (int)min, (int)max, (int)rx_channel.pwmval3, (int)((rx_channel.pwmval1 - 1100)/25));
+//			sprintf(outbuff, "Armed %d Throttle: %04d Rudder: %04d kP: %04d\r\n", (int)armed_flag, (int)rx_channel.pwmval3, (int)rx_channel.pwmval4, (int)((rx_channel.pwmval1 - 1100)/25));
+			sprintf(outbuff, "Roll: %04d Throttle: %04d kP: %04d speed: %04d step: %04d\r\n", (int)roll, (int)rx_channel.pwmval3, (int)(rx_channel.pwmval1 - 1100)/25, (int)motor_speed.motor1, (int)PIDRoll.vl_PreU);
+			VCP_write(outbuff, strlen(outbuff));
+
+			// Update loop time
+			comms_time = HAL_GetTick() + COMMS_TIME;
+		}
 /*
 		if(armed_flag == 0){
 			ExpLedOn(RED_LED);
