@@ -262,16 +262,99 @@ void FreeIMUSendYawPitchRoll(int count)
 
 void FreeIMUWriteCalibration(void)
 {
-//	CalibVals calibration;
+	unsigned char inbuff[36];
+	int len=0;
+
+	memset(inbuff, 0, sizeof(inbuff));
+	memset(&calibration, 0, sizeof(CalibVals));
+
+	while(len < sizeof(inbuff)){
+		int iret = VCP_read((unsigned char*)&inbuff[len], sizeof(inbuff)-len);
+
+		if(iret > 0)
+			len += iret;
+	}
+
+	memcpy((unsigned char*)calibration.offsets, inbuff, 12);
+	memcpy((unsigned char*)calibration.scales, &inbuff[12], 24);
+
+	EEPROMSet(VAR_CALIBRATION, (uint8_t*)&calibration);
 }
 
 void FreeIMUReadCalibration(void)
 {
-//	CalibVals calibration;
+	char outbuff[100];
+	int pos=0;
+
+	EEPROMGet(VAR_CALIBRATION, (uint8_t*)&calibration);
+
+	// Accelerometer offsets
+	memcpy(outbuff, "acc offset: ", 12);
+	pos+=12;
+	hex_to_ascii((unsigned char*)&calibration.offsets[0], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.offsets[1], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.offsets[2], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = '\n';
+
+	VCP_write(outbuff, pos);
+
+	// Magnetomer offsets
+	pos=0;
+	memcpy(outbuff, "mag offset: ", 12);
+	pos+=12;
+	hex_to_ascii((unsigned char*)&calibration.offsets[3], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.offsets[4], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.offsets[5], &outbuff[pos], sizeof(uint16_t));
+	pos += sizeof(uint16_t)*2;
+	outbuff[pos++] = '\n';
+
+	VCP_write(outbuff, pos);
+
+	// Accelerometer scale
+	pos=0;
+	memcpy(outbuff, "acc scale: ", 11);
+	pos+=11;
+	hex_to_ascii((unsigned char*)&calibration.scales[0], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.scales[1], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.scales[2], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = '\n';
+
+	VCP_write(outbuff, pos);
+
+	//Magnetometer scale
+	pos=0;
+	memcpy(outbuff, "mag scale: ", 11);
+	pos+=11;
+	hex_to_ascii((unsigned char*)&calibration.scales[3], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.scales[4], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = ',';
+	hex_to_ascii((unsigned char*)&calibration.scales[5], &outbuff[pos], sizeof(float));
+	pos += sizeof(float)*2;
+	outbuff[pos++] = '\n';
+
+	VCP_write(outbuff, pos);
 }
 
 void FreeIMUClearCalibration(void)
 {
-
+	memset(&calibration, 0, sizeof(CalibVals));
+	EEPROMSet(VAR_CALIBRATION, (uint8_t*)&calibration);
 }
 
