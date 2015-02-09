@@ -285,17 +285,25 @@ int main(void)
 
 	ExpLedOff(RED_LED);
 	ExpLedOff(ORANGE_LED);
-
+//freeimu();
 #define RX_TIME			3
+#define MOTOR_TIME		3
 #define COMMS_TIME		10
 
 	uint32_t current = HAL_GetTick();
 	uint32_t rx_time = current + 500;
+	uint32_t motor_time = current + MOTOR_TIME;
 	uint32_t comms_time = current + COMMS_TIME;		// Update comms every 100ms
+	uint16_t speed_step=1;
 
 	memset(&rx_channel, 0, sizeof(PwmInfo));
 
-freeimu();
+/*
+	CalibVals calibration2;
+	memcpy(&calibration2, "\x7d\xff\x24\x02\xda\xfe\xc6\xff\xac\xff\xb8\xff\xd7\x5a\x7e\x46\xdf\xf8\x81\x46\x7b\xcc\x84\x46\x82\xa9\x46\x43\x23\xc6\x84\x43\xc4\x1e\x55\x43",sizeof(CalibVals));
+	EEPROMSet(VAR_CALIBRATION, (uint8_t*)&calibration2);
+*/
+
 	for(;;){
 
 		current = HAL_GetTick();
@@ -366,23 +374,47 @@ freeimu();
 			PIDYaw.vl_PreU = 1;
 			PIDPitch.vl_PreU = 1;
 			PIDRoll.vl_PreU = 1;
+			speed_step = 1;
 		}
 
 		if(armed_flag){
+/*
+			sprintf(outbuff, "Calibration [");
+			hex_to_ascii((unsigned char*)&calibration, &outbuff[strlen(outbuff)], sizeof(CalibVals));
+			sprintf(&outbuff[strlen(outbuff)], "]\r\n");
+			VCP_write(outbuff, strlen(outbuff));
+*/
 			ExpLedOn(GREEN_LED);
 
-			// Apply throttle
+			if(current > motor_time){
+				// Apply throttle
+				float neg_roll;
 
-			PIDRoll.v_Kp = (rx_channel.pwmval1 - 1100)/25;
-			PIDRoll.vi_Ref = 0;
-			PIDRoll.vi_FeedBack = roll;
-			PIDRoll.vl_PreU = PIDCalc(&PIDRoll);
+				if(roll > 0)
+					neg_roll = -roll;
+				else
+					neg_roll = roll;
 
-			motor_speed.motor1 = rx_channel.pwmval3 - PIDRoll.vl_PreU;
-			motor_speed.motor2 = rx_channel.pwmval3 + PIDRoll.vl_PreU;
+				PIDRoll.v_Kp = (rx_channel.pwmval1 - 1100)/25;
+				PIDRoll.vi_Ref = 0;
+				PIDRoll.vi_FeedBack = neg_roll;
+				PIDRoll.vl_PreU = speed_step;
+				speed_step = PIDCalc(&PIDRoll);
 
-			ESC_Update();
+				if(PIDRoll.vi_PreError < 0)
+					speed_step = -speed_step;
 
+
+				if(roll > 0)
+					speed_step = -speed_step;
+
+				motor_speed.motor1 = rx_channel.pwmval3 - speed_step;
+				motor_speed.motor2 = rx_channel.pwmval3 + speed_step;
+
+		//			ESC_Update();
+
+				motor_time = current + MOTOR_TIME;
+			}
 		}
 
 		if(calibrating_flag){
@@ -406,6 +438,7 @@ freeimu();
 			// Update loop time
 			comms_time = HAL_GetTick() + COMMS_TIME;
 		}
+
 /*
 		if(armed_flag == 0){
 			ExpLedOn(RED_LED);
