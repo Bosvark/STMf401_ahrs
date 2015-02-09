@@ -5,6 +5,7 @@
 #include <stm32f401_discovery_gyroscope.h>
 #include <stm32f401_discovery_accelerometer.h>
 #include "imu.h"
+#include "eeprom.h"
 
 static Point3df gyro_xyz_filtered;
 static char filter_init=0;
@@ -17,8 +18,71 @@ static float previous_time=0;
 static float gyro_offs_xyz[3];
 static float gyro_noise_xyz[3];
 
+typedef struct{
+	float acc_offs_x;
+	float acc_offs_y;
+	float acc_offs_z;
+
+	float mag_offs_x;
+	float mag_offs_y;
+	float mag_offs_z;
+
+	float acc_scale_x;
+	float acc_scale_y;
+	float acc_scale_z;
+
+	float mag_scale_x;
+	float mag_scale_y;
+	float mag_scale_z;
+}AhrsCalibration;
+
+static AhrsCalibration ahrs_calib;
+
 void ImuInit(void)
 {
+	CalibVals calibration;
+	EEPROMGet(VAR_CALIBRATION, (uint8_t*)&calibration);
+
+	int16_t temp;
+
+	memcpy(&temp, &calibration.offsets[0], sizeof(int16_t));
+	ahrs_calib.acc_offs_x = (float)temp;
+
+	memcpy(&temp, &calibration.offsets[2], sizeof(int16_t));
+	ahrs_calib.acc_offs_y = (float)temp;
+
+	memcpy(&temp, &calibration.offsets[4], sizeof(int16_t));
+	ahrs_calib.acc_offs_z = (float)temp;
+
+	memcpy(&temp, &calibration.offsets[6], sizeof(int16_t));
+	ahrs_calib.mag_offs_x = (float)temp;
+
+	memcpy(&temp, &calibration.offsets[8], sizeof(int16_t));
+	ahrs_calib.mag_offs_y = (float)temp;
+
+	memcpy(&temp, &calibration.offsets[10], sizeof(int16_t));
+	ahrs_calib.mag_offs_z = (float)temp;
+
+	float ftemp;
+
+	memcpy(&ftemp, &calibration.scales[0], sizeof(float));
+	ahrs_calib.acc_scale_x = ftemp;
+
+	memcpy(&ftemp, &calibration.scales[4], sizeof(float));
+	ahrs_calib.acc_scale_y = ftemp;
+
+	memcpy(&ftemp, &calibration.scales[8], sizeof(float));
+	ahrs_calib.acc_scale_z = ftemp;
+
+	memcpy(&ftemp, &calibration.scales[12], sizeof(float));
+	ahrs_calib.mag_scale_x = ftemp;
+
+	memcpy(&ftemp, &calibration.scales[16], sizeof(float));
+	ahrs_calib.mag_scale_y = ftemp;
+
+	memcpy(&ftemp, &calibration.scales[20], sizeof(float));
+	ahrs_calib.mag_scale_z = ftemp;
+
 	BSP_GYRO_Init();
 	if(BSP_ACCELERO_Init() != ACCELERO_OK)
 		BSP_LED_On(LED3);
@@ -41,7 +105,7 @@ void ImuYawPitchRoll(float *yaw, float *pitch, float *roll)
 	Point3df gyro_xyz;
 	Point3df accel_xyz;
 	Point3df mag_xyz;
-	const float gyroScale = 0.001, accScale = 16348.0, alpha = 0.98;
+	const float gyroScale = 0.001,  alpha = 0.98;//accScale = 16348.0,
 	float acc_pitch=0, gyro_pitch=0, error_angle=0, acc_roll=0, gyro_roll=0, dt=0;
 
 	if(filter_init == 0){
@@ -56,10 +120,14 @@ void ImuYawPitchRoll(float *yaw, float *pitch, float *roll)
 	gyro_xyz.x = ((gyro_xyz.x - gyro_offs_xyz[0]) * gyroScale);
 	gyro_xyz.y = ((gyro_xyz.y - gyro_offs_xyz[1]) * gyroScale);
 	gyro_xyz.z = ((gyro_xyz.z - gyro_offs_xyz[2]) * gyroScale);
-
+/*
 	accel_xyz.x = accel_xyz.x / accScale;
 	accel_xyz.y = accel_xyz.y / accScale;
 	accel_xyz.z = accel_xyz.z / accScale;
+*/
+	accel_xyz.x = (accel_xyz.x - ahrs_calib.acc_offs_x) / ahrs_calib.acc_scale_x;
+	accel_xyz.x = (accel_xyz.y - ahrs_calib.acc_offs_y) / ahrs_calib.acc_scale_y;
+	accel_xyz.x = (accel_xyz.z - ahrs_calib.acc_offs_z) / ahrs_calib.acc_scale_z;
 
 	float current_time = (float)HAL_GetTick()/1000000;
 	dt = current_time - previous_time;
@@ -179,7 +247,7 @@ void MagInit(void)
 
 void zero_mag(void)
 {
-#if 0
+#if 1
 	Point3df magpoint;
 	int i;
 
