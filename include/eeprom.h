@@ -5,7 +5,7 @@
 
 typedef struct
 {
-	uint16_t offsets[6];
+	int16_t offsets[6];
 	float scales[6];
 }__attribute__((packed))CalibVals;
 
