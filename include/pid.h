@@ -3,39 +3,35 @@
 
 #include <stdint.h>
 
-#define VV_MAX				500
-#define VV_MIN				0
-#define VV_DEADLINE			0
+#define MANUAL 0
+#define AUTOMATIC 1
 
-#define SPEED_KP      15
-#define SPEED_KI      0
-#define SPEED_KD      0
-
-#define SPEED_KP_1    15
-#define SPEED_KI_1    5
-#define SPEED_KD_1    0
-
-#define SPEED_KP_2    15
-#define SPEED_KI_2    5
-#define SPEED_KD_2    0
-
-typedef struct PID
+typedef struct
 {
-	int16_t vi_Ref;
-	int16_t vi_FeedBack;
-	int16_t vi_PreError;
-	int16_t vi_PreDerror;
-	int16_t v_Kp;
-	int16_t v_Ki;
-	int16_t v_Kd;
-	int16_t vl_PreU;
-}PID;
+	unsigned long lastTime;
+	double Input;
+	double Output;
+	double Setpoint;
+	double ITerm;
+	double lastInput;
+	double kp;
+	double ki;
+	double kd;
+	unsigned int SampleTime;
+	double outMin;
+	double outMax;
+	int inAuto;
+}Pid;
 
-PID PIDYaw;
-PID PIDRoll;
-PID PIDPitch;
+Pid PIDYaw;
+Pid PIDRoll;
+Pid PIDPitch;
 
-void PIDInit(void);
-int16_t PIDCalc(PID *pp);
+int PidCompute(Pid *pid);
+void PidSetTunings(Pid *pid, double Kp, double Ki, double Kd);
+void PidSetSampleTime(Pid *pid, int NewSampleTime);
+void PidSetOutputLimits(Pid *pid, double Min, double Max);
+void PidSetMode(Pid *pid, int Mode);
+void PidInitialize(Pid *pid);
 
 #endif /* __SCHEDULE_H__ */

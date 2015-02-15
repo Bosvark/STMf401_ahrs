@@ -1,72 +1,105 @@
+#include "stm32f4xx_hal.h"
 #include "pid.h"
 
-void PIDInit(void)
+/***************************************************************************************************************
+ * Code based on by http://brettbeauregard.com/blog/2011/04/improving-the-beginners-pid-introduction/          *
+ ***************************************************************************************************************/
+
+int PidCompute(Pid *pid)
 {
-	PIDYaw.vi_Ref = 0 ;
-	PIDYaw.vi_FeedBack = 0 ;
+   if(!pid->inAuto)
+	   return 0;
 
-	PIDYaw.vi_PreError = 0 ;
-	PIDYaw.vi_PreDerror = 0 ;
+   unsigned long now = HAL_GetTick();
 
-	PIDYaw.v_Kp = SPEED_KP;
-	PIDYaw.v_Ki = SPEED_KI;
-	PIDYaw.v_Kd = SPEED_KD;
+   int timeChange = (now - pid->lastTime);
 
-	PIDYaw.vl_PreU = 0;
-  /*********************************************/
-	PIDRoll.vi_Ref = 0 ;
-	PIDRoll.vi_FeedBack = 0 ;
+   if(timeChange>=pid->SampleTime)
+   {
+      //Compute all the working error variables
+      double error = pid->Setpoint - pid->Input;
+      pid->ITerm += (pid->ki * error);
 
-	PIDRoll.vi_PreError = 0 ;
-	PIDRoll.vi_PreDerror = 0 ;
+      if(pid->ITerm > pid->outMax)
+    	  pid->ITerm = pid->outMax;
+      else if(pid->ITerm < pid->outMin)
+    	  pid->ITerm = pid->outMin;
 
-	PIDRoll.v_Kp = SPEED_KP_1;
-	PIDRoll.v_Ki = SPEED_KI_1;
-	PIDRoll.v_Kd = SPEED_KD_1;
+      double dInput = (pid->Input - pid->lastInput);
 
-	PIDRoll.vl_PreU = 0;
-   /*********************************************/
-	PIDPitch.vi_Ref = 0 ;
-	PIDPitch.vi_FeedBack = 0 ;
+      //Compute PID Output
+      pid->Output = pid->kp * error + pid->ITerm - pid->kd * dInput;
 
-	PIDPitch.vi_PreError = 0 ;
-	PIDPitch.vi_PreDerror = 0 ;
+      if(pid->Output > pid->outMax)
+    	  pid->Output = pid->outMax;
+      else if(pid->Output < pid->outMin)
+    	  pid->Output = pid->outMin;
 
-	PIDPitch.v_Kp = SPEED_KP_2;
-	PIDPitch.v_Ki = SPEED_KI_2;
-	PIDPitch.v_Kd = SPEED_KD_2;
+      //Remember some variables for next time
+      pid->lastInput = pid->Input;
+      pid->lastTime = now;
+   }
 
-	PIDPitch.vl_PreU = 0;
+   return 1;
 }
 
-int16_t PIDCalc(PID *pp)
+void PidSetTunings(Pid *pid, double Kp, double Ki, double Kd)
 {
-	int16_t  error,d_error,dd_error;
-
-    error = pp->vi_Ref - pp->vi_FeedBack;
-
-    d_error = error - pp->vi_PreError;
-
-    dd_error = d_error - pp->vi_PreDerror;
-
-    pp->vi_PreError = error;
-    pp->vi_PreDerror = d_error;
-
-    if( ( error < VV_DEADLINE ) && ( error > -VV_DEADLINE ) )
-    {
-        ;
-    }
-    else
-    {
-        pp->vl_PreU += (pp -> v_Kp * d_error + pp -> v_Ki * error + pp->v_Kd*dd_error);
-    }
-
-    if( pp->vl_PreU >= VV_MAX )
-        pp->vl_PreU = VV_MAX;
-    else if( pp->vl_PreU <= VV_MIN )
-        pp->vl_PreU = VV_MIN;
-
-     return (pp->vl_PreU);
+  double SampleTimeInmSec = ((double)pid->SampleTime);
+  pid->kp = Kp;
+  pid->ki = Ki * SampleTimeInmSec;
+  pid->kd = Kd / SampleTimeInmSec;
 }
 
-/******************************************************************************/
+void PidSetSampleTime(Pid *pid, int NewSampleTime)
+{
+   if (NewSampleTime > 0)
+   {
+      double ratio  = (double)NewSampleTime / (double)pid->SampleTime;
+      pid->ki *= ratio;
+      pid->kd /= ratio;
+      pid->SampleTime = (unsigned long)NewSampleTime;
+   }
+}
+
+void PidSetOutputLimits(Pid *pid, double Min, double Max)
+{
+   if(Min > Max)
+	   return;
+
+   pid->outMin = Min;
+   pid->outMax = Max;
+
+   if(pid->Output > pid->outMax)
+	   pid->Output = pid->outMax;
+   else if(pid->Output < pid->outMin)
+	   pid->Output = pid->outMin;
+
+   if(pid->ITerm > pid->outMax)
+	   pid->ITerm = pid->outMax;
+   else if(pid->ITerm < pid->outMin)
+	   pid->ITerm = pid->outMin;
+}
+
+void PidSetMode(Pid *pid, int Mode)
+{
+    char newAuto = (Mode == AUTOMATIC);
+
+    if(newAuto && !pid->inAuto)
+    {  //we just went from manual to auto
+    	PidInitialize(pid);
+    }
+
+    pid->inAuto = newAuto;
+}
+
+void PidInitialize(Pid *pid)
+{
+	pid->lastInput = pid->Input;
+	pid->ITerm = pid->Output;
+
+	if(pid->ITerm > pid->outMax)
+		pid->ITerm= pid->outMax;
+	else if(pid->ITerm < pid->outMin)
+		pid->ITerm = pid->outMin;
+}
