@@ -84,8 +84,13 @@ void ImuInit(void)
 	ahrs_calib.mag_scale_z = ftemp;
 
 	BSP_GYRO_Init();
+	BSP_GYRO_Reset();
+
 	if(BSP_ACCELERO_Init() != ACCELERO_OK)
 		BSP_LED_On(LED3);
+
+	BSP_ACCELERO_Reset();
+
 	MagInit();
 
 	Point3df prev_gyro_xyz;
@@ -95,6 +100,8 @@ void ImuInit(void)
 	yaw=0.0;
 	pitch=0.0;
 	roll=0.0;
+
+	HAL_Delay(10);
 
 	zero_gyro();
 	zero_mag();
