@@ -41,6 +41,13 @@ int FreeIMU_serial(FreeIMU_Func *funcs)
 
 			break;
 		}
+		case '.':
+		{
+			if(funcs->GetAttitude != NULL)
+				funcs->GetAttitude(1);
+
+			break;
+		}
 		case 'b':
 		{
 			char count=0;
