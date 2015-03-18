@@ -77,6 +77,7 @@ void ExpBuzzerToggle(void)
 static const uint32_t buzzer_1_1[]={BEAT_ONE, BEAT_ONE, BEAT_ONE, 0};
 static const uint32_t buzzer_2_2[]={BEAT_TWO, BEAT_TWO, BEAT_TWO, 0};
 static const uint32_t buzzer_1_1_2[]={BEAT_ONE, BEAT_ONE, BEAT_ONE, BEAT_ONE, BEAT_TWO, 0};
+static const uint32_t buzzer_1_1_long[]={BEAT_ONE, BEAT_ONE, 2000, 0};
 uint32_t *buzz=NULL;
 static uint8_t buzz_pos=0;
 uint32_t beat=0;
@@ -93,6 +94,9 @@ void ExpBuzzerTune(BUZZER_TUNE tune)
 			break;
 		case BUZZER_CALIBRATION_START:
 			buzz = (uint32_t*)buzzer_1_1_2;
+			break;
+		case BUZZER_2_SHORTS_LONG:
+			buzz = (uint32_t*)buzzer_1_1_long;
 			break;
 		default:
 			return;

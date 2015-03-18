@@ -12,6 +12,8 @@ typedef struct
 	void (*Calibrate)(void);
 	void (*Debug)(void);
 	void (*GetAttitude)(int count);
+	void (*GetAttitudeBytes)(void);
+	void (*FormatFlash)(void);
 }FreeIMU_Func;
 
 int FreeIMU_serial(FreeIMU_Func *funcs);
@@ -22,5 +24,6 @@ void FreeIMUSendYawPitchRoll(int count);
 void FreeIMUWriteCalibration(void);
 void FreeIMUReadCalibration(void);
 void FreeIMUClearCalibration(void);
+void FreeIMUFormatFlash(void);
 
 #endif // _FREE_IMU_SERIAL_H_

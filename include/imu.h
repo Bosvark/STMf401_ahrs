@@ -32,7 +32,7 @@ volatile Point3df mag_offs_min;
 volatile Point3df mag_offs_max;
 volatile Point3df mag_offs;
 
-void ImuInit(void);
+int ImuInit(void);
 void ImuYawPitchRoll(float *yaw, float *pitch, float *roll);
 
 void gyro_read(Point3df *xyz);

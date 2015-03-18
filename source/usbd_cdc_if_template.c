@@ -260,13 +260,13 @@ int VCP_write(const void *pBuffer, int size)
 		return size;
 	}
 
-//	USBD_CDC_HandleTypeDef *pCDC = (USBD_CDC_HandleTypeDef *)USBD_Device.pClassData;
-//	while(pCDC->TxState) { } //Wait for previous transfer
+	USBD_CDC_HandleTypeDef *pCDC = (USBD_CDC_HandleTypeDef *)USBD_Device.pClassData;
+	while(pCDC->TxState) { } //Wait for previous transfer
 
 	USBD_CDC_SetTxBuffer(&USBD_Device, (uint8_t *)pBuffer, size);
 	if (USBD_CDC_TransmitPacket(&USBD_Device) != USBD_OK)
 		return 0;
 
-//	while(pCDC->TxState) { } //Wait until transfer is done
+	while(pCDC->TxState) { } //Wait until transfer is done
 	return size;
 }

@@ -345,6 +345,8 @@ const float magn_scale_z = %f;
     self.ser.write("C")
     for i in range(4):
       print self.ser.readline()
+
+    print "\nCalibration complete"
       
       
   def clear_calibration_eeprom(self):

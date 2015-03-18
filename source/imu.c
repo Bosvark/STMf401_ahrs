@@ -6,6 +6,7 @@
 #include <stm32f401_discovery_accelerometer.h>
 #include "imu.h"
 #include "eeprom.h"
+#include "exp_board.h"
 
 static Point3df gyro_xyz_filtered;
 static char filter_init=0;
@@ -38,10 +39,15 @@ typedef struct{
 
 static AhrsCalibration ahrs_calib;
 
-void ImuInit(void)
+int ImuInit(void)
 {
+	int iret = 0;
 	CalibVals calibration;
-	EEPROMGet(VAR_CALIBRATION, (uint8_t*)&calibration);
+
+	if(EEPROMGet(VAR_CALIBRATION, (uint8_t*)&calibration) < 0){
+		ExpLedOn(RED_LED);
+		iret = -1;
+	}
 
 	int16_t temp;
 
@@ -86,8 +92,10 @@ void ImuInit(void)
 	BSP_GYRO_Init();
 	BSP_GYRO_Reset();
 
-	if(BSP_ACCELERO_Init() != ACCELERO_OK)
-		BSP_LED_On(LED3);
+	if(BSP_ACCELERO_Init() != ACCELERO_OK){
+		ExpLedOn(RED_LED);
+		iret = -1;
+	}
 
 	BSP_ACCELERO_Reset();
 
@@ -105,6 +113,8 @@ void ImuInit(void)
 
 	zero_gyro();
 	zero_mag();
+
+	return iret;
 }
 
 void ImuYawPitchRoll(float *yaw, float *pitch, float *roll)
@@ -136,7 +146,7 @@ void ImuYawPitchRoll(float *yaw, float *pitch, float *roll)
 	accel_xyz.x = (accel_xyz.y - ahrs_calib.acc_offs_y) / ahrs_calib.acc_scale_y;
 	accel_xyz.x = (accel_xyz.z - ahrs_calib.acc_offs_z) / ahrs_calib.acc_scale_z;
 
-	float current_time = (float)HAL_GetTick()/1000000;
+	float current_time = (float)HAL_GetTick()*0.0000001;///1000000;
 	dt = current_time - previous_time;
 
 	acc_pitch = atanf((accel_xyz.x / sqrtf(powf(accel_xyz.y, 2) + powf(accel_xyz.z, 2)))) * 180.0/PI;

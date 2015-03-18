@@ -106,14 +106,14 @@ int32_t EEPROMGet(VARIABLE varid, uint8_t *data)
 			sector_addr += length;
 	}
 
+	def->virtual_address = 0;
+
 	return -1;
 }
 
 int32_t EEPROMSet(VARIABLE varid, uint8_t *data)
 {
 	uint32_t sector_addr = valid_sector+sizeof(uint32_t), var=0, length=0;
-
-VCP_write("EEPROMSet\r\n", 11);
 
 	if(varid >= VAR_THE_END)
 		return -1;
@@ -154,10 +154,8 @@ VCP_write("EEPROMSet\r\n", 11);
 	// If we got here, then we have reached the end of the valid sector and garbage collection needs to be done
 	eeprom_garbage_collection();
 
-VCP_write("Going into recursion\r\n", 22);
 	// Call ourselves again to retry
 	EEPROMSet(varid, data);
-VCP_write("Out of recursion\r\n", 18);
 
 	return 0;
 }
@@ -179,7 +177,6 @@ static uint32_t eeprom_find_valid_sector(void)
 	switch(state_sector1)
 	{
 		case SECTOR_STATE_RECEIVING:
-VCP_write("DBG1\r\n", 6);
 			if(state_sector2 == SECTOR_STATE_VALID){
 				eeprom_garbage_collection();
 				return 0;
@@ -189,7 +186,6 @@ VCP_write("DBG1\r\n", 6);
 
 			break;
 		case SECTOR_STATE_VALID:
-VCP_write("DBG2\r\n", 6);
 			if(state_sector2 == SECTOR_STATE_ERASED){
 				valid_sector = EEPROM_ADDR_SECTOR1;
 				return 0;
@@ -201,12 +197,9 @@ VCP_write("DBG2\r\n", 6);
 				return 0;
 			}
 		case SECTOR_STATE_ERASED:
-VCP_write("DBG3\r\n", 6);
 		default:
 		{
-VCP_write("DBG4\r\n", 6);
 			if(state_sector2 == SECTOR_STATE_ERASED){
-VCP_write("DBG5\r\n", 6);
 				// Mark sector 1 as valid
 				sector_addr=EEPROM_ADDR_SECTOR1;
 				value = SECTOR_STATE_VALID;
@@ -218,7 +211,6 @@ VCP_write("DBG5\r\n", 6);
 				return 0;
 
 			}else if(state_sector2 == SECTOR_STATE_RECEIVING){
-VCP_write("DBG6\r\n", 6);
 				sector_addr=EEPROM_ADDR_SECTOR2;
 				FlashSectorErase(&sector_addr);
 				FlashFastRead(&sector_addr, (uint8_t*)&state_sector2, sizeof(state_sector2));
@@ -227,19 +219,16 @@ VCP_write("DBG6\r\n", 6);
 				return 0;
 
 			}else if(state_sector2 == SECTOR_STATE_VALID){
-VCP_write("DBG7\r\n", 6);
 				valid_sector = EEPROM_ADDR_SECTOR2;
 				return 0;
 
 			}else{
-VCP_write("DBG8\r\n", 6);
 				return -1;
 			}
 
 			break;
 		}
 	}
-VCP_write("DBG9\r\n", 6);
 
 	return -1;
 }
@@ -249,8 +238,6 @@ static int32_t eeprom_garbage_collection(void)
 {
 	uint32_t sector_addr, sector_addr_rx, sector_addr_tx, value;
 	uint32_t state_sector1, state_sector2;
-char outbuff[60];
-	VCP_write("Taking out the trash...\r\n", 25);
 
 	sector_addr=EEPROM_ADDR_SECTOR1;
 	FlashFastRead(&sector_addr, (uint8_t*)&state_sector1, sizeof(state_sector1));
@@ -278,8 +265,7 @@ char outbuff[60];
 
 	if(checkval == ADDRESS_CLEAR){
 		// We should not be here
-		sprintf(outbuff, "We should not be here!\r\n");
-		VCP_write(outbuff, strlen(outbuff));
+		VCP_write("We should not be here!\r\n", 24);
 		return -1;
 	}
 
@@ -293,30 +279,26 @@ char outbuff[60];
 
 	uint32_t addrtx=sector_addr_tx+sizeof(uint32_t);	// Start after the sector header bytes
 	uint32_t addrrx=sector_addr_rx+sizeof(uint32_t);	// Start after the sector header bytes
-VCP_write("DBG1\r\n", 6);
+
 	while(addrtx < sector_addr_tx + EEPROM_SECTOR_SIZE){
 		uint32_t virt_addr=0, length=0xffffffff, i=0;
-sprintf(outbuff, "DBG2 0x%08x\r\n", (unsigned int)addrtx);
-VCP_write(outbuff, strlen(outbuff));
+
 		FlashFastRead(&addrtx, (uint8_t*)&virt_addr, sizeof(virt_addr));
 
 		if(virt_addr == ADDRESS_CLEAR){
 			// We have reached the end
-VCP_write("DBG3\r\n", 6);
 			break;
 		}else
 			addrtx += sizeof(uint32_t);
 
-VCP_write("DBG4\r\n", 6);
 		FlashFastRead(&addrtx, (uint8_t*)&length, sizeof(virt_addr));
 		addrtx += sizeof(uint32_t);
 
 		if(virt_addr == 0){	// Dont copy invalid variables
-VCP_write("DBG5\r\n", 6);
 			addrtx += length;
 			continue;
 		}
-VCP_write("DBG6\r\n", 6);
+
 		// Update the variable lookup table
 		VarDef *def = &vardefs[virt_addr];
 		def->virtual_address = addrrx;
@@ -327,14 +309,12 @@ VCP_write("DBG6\r\n", 6);
 		addrrx += sizeof(uint32_t);
 
 		for(i=0; i<length; i++){
-VCP_write("DBG7\r\n", 6);
 			uint8_t indata;
 			FlashFastRead(&addrtx, (uint8_t*)&indata, 1);
 			addrtx++;
 			FlashPageProgram(&addrrx, (uint8_t*)&indata, 1);
 			addrrx++;
 		}
-VCP_write("DBG8\r\n", 6);
 	}
 
 	// Mark receiving sector as 'valid'
@@ -344,8 +324,6 @@ VCP_write("DBG8\r\n", 6);
 
 	// Erase sending sector
 	FlashSectorErase(&sector_addr_tx);
-
-	VCP_write("Trash is out\r\n", 14);
 
 	return 0;
 }

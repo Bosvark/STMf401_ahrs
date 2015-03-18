@@ -76,8 +76,10 @@ USBD_DescriptorsTypeDef VCP_Desc = {
 __ALIGN_BEGIN uint8_t hUSBDDeviceDesc[USB_LEN_DEV_DESC] __ALIGN_END = {
   0x12,                       /* bLength */
   USB_DESC_TYPE_DEVICE,       /* bDescriptorType */
-  0x00,                       /* bcdUSB */
-  0x02,
+ // 0x00,                       /* bcdUSB */
+ // 0x02,
+0x10,
+0x01,
   0x00,                       /* bDeviceClass */
   0x00,                       /* bDeviceSubClass */
   0x00,                       /* bDeviceProtocol */

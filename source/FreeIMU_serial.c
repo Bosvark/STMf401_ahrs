@@ -6,6 +6,7 @@
 #include "eeprom.h"
 #include "exp_board.h"
 #include "utils.h"
+#include "flashmem.h"
 
 #define VERSION_MAJOR	2
 #define VERSION_MINOR	1
@@ -44,7 +45,7 @@ int FreeIMU_serial(FreeIMU_Func *funcs)
 		case '.':
 		{
 			if(funcs->GetAttitude != NULL)
-				funcs->GetAttitude(1);
+				funcs->GetAttitudeBytes();
 
 			break;
 		}
@@ -77,6 +78,7 @@ int FreeIMU_serial(FreeIMU_Func *funcs)
 		case 'c':
 			if(funcs->Calibrate != NULL)
 				funcs->Calibrate();
+			break;
 		case 'd':
 			if(funcs->Debug != NULL)
 				funcs->Debug();
@@ -84,6 +86,10 @@ int FreeIMU_serial(FreeIMU_Func *funcs)
 		case 'x':
 			if(funcs->ClearCalibration != NULL)
 				funcs->ClearCalibration();
+			break;
+		case 'f':
+			if(funcs->FormatFlash != NULL)
+				funcs->FormatFlash();
 			break;
 	}
 
@@ -269,6 +275,19 @@ void FreeIMUSendYawPitchRoll(int count)
 
 void FreeIMUWriteCalibration(void)
 {
+/*
+Offsets:8be576100000c9ffbeffa3ff
+Scales:fbb9b546fca889455ae994474e45ec424e259a4383508043
+
+Calibration values read back from EEPROM:
+acc offset: 8BE5,7610,0000
+
+mag offset: C9FF,BEFF,A3FF
+
+acc scale: FBB9B546,FCA88945,5AE99447
+
+mag scale: 4E45EC42,4E259A43,83508043
+ */
 	unsigned char inbuff[36];
 	int len=0;
 
@@ -363,5 +382,19 @@ void FreeIMUClearCalibration(void)
 {
 	memset(&calibration, 0, sizeof(CalibVals));
 	EEPROMSet(VAR_CALIBRATION, (uint8_t*)&calibration);
+}
+
+void FreeIMUFormatFlash(void)
+{
+	char outbuff[20];
+
+	memcpy(outbuff, "Formatting FLASH\n", 17);
+	VCP_write(outbuff, 17);
+
+	FlashChipErase();
+	EEPROMInit();
+
+	memcpy(outbuff, "Done\n", 5);
+	VCP_write(outbuff, 5);
 }
 

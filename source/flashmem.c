@@ -124,27 +124,12 @@ int32_t FlashPageProgram(uint32_t *pointer, uint8_t *data, uint32_t length)
 {
 	uint32_t i=0, pos=0;
 	FlashStatusRegister status;
-char outbuff[60];
+
 	uint32_t page_no = *pointer / 256;
 	uint32_t page_boundary = (page_no + 1) * 256;
 	uint32_t page_space = page_boundary - *pointer;
 	uint32_t write_address, write_length;
 	uint8_t multi_page_write=0;
-
-	sprintf(outbuff, "*pointer = %08x\r\n", (unsigned int)*pointer);
-	VCP_write(outbuff, strlen(outbuff));
-
-	sprintf(outbuff, "page_no = %d\r\n", (unsigned int)page_no);
-	VCP_write(outbuff, strlen(outbuff));
-
-	sprintf(outbuff, "page_boundary = %d\r\n", (unsigned int)page_boundary);
-	VCP_write(outbuff, strlen(outbuff));
-
-	sprintf(outbuff, "page_space = %d\r\n", (unsigned int)page_space);
-	VCP_write(outbuff, strlen(outbuff));
-
-	sprintf(outbuff, "length = %d\r\n", (unsigned int)length);
-	VCP_write(outbuff, strlen(outbuff));
 
 	write_address = *pointer;
 
@@ -153,11 +138,7 @@ char outbuff[60];
 		multi_page_write = 1;
 		write_length = page_space;
 		length -= write_length;
-sprintf(outbuff, "1 address = %08x multi_page_write = 1 write_length = %d\r\n", (unsigned int)write_address, (unsigned int)write_length);
-VCP_write(outbuff, strlen(outbuff));
 	}else{
-sprintf(outbuff, "Normal write\r\n");
-VCP_write(outbuff, strlen(outbuff));
 		write_length = length;
 	}
 
@@ -210,8 +191,7 @@ VCP_write(outbuff, strlen(outbuff));
 				write_length = length;
 
 			length -= write_length;
-sprintf(outbuff, "2 address = %08x write_length = %d\r\n", (unsigned int)write_address, (unsigned int)write_length);
-VCP_write(outbuff, strlen(outbuff));		}
+		}
 	}while(multi_page_write);
 
 	return 0;

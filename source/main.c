@@ -36,6 +36,7 @@ static void SystemClock_Config(void);
 
 void unarmed_process(PwmInfo *pwm);
 void armed_process(PwmInfo *pwm);
+void MyPidInit(void);
 void version(void);
 void imu_raw(void);
 void imu_base_int(char count);
@@ -197,6 +198,21 @@ void command(void)
 }
 */
 
+void send_attitude_bytes(void)
+{
+	char outbuff[20];
+//	float yaw=0,pitch=0,roll=0;
+
+	ExpLedOn(ORANGE_LED);
+
+//	ImuYawPitchRoll(&yaw, &pitch, &roll);
+
+	sprintf(outbuff, "%d, %d, %d\n", (int)roll, (int)pitch, (int)yaw);
+	VCP_write(outbuff, strlen(outbuff));
+
+	ExpLedOff(ORANGE_LED);
+}
+
 void freeimu(void)
 {
 	static FreeIMU_Func fimu_funcs;
@@ -206,9 +222,11 @@ void freeimu(void)
 	fimu_funcs.GetBaseValues = &FreeIMUBaseInt;
 //	fimu_funcs.GetQuat = &send_quaternion;
 	fimu_funcs.GetAttitude = &FreeIMUSendYawPitchRoll;
+	fimu_funcs.GetAttitudeBytes = &send_attitude_bytes;
 	fimu_funcs.LoadCalibrationValues = &FreeIMUReadCalibration;
 	fimu_funcs.Calibrate = &FreeIMUWriteCalibration;
-	fimu_funcs.ClearCalibration = &FreeIMUClearCalibration;
+	fimu_funcs.ClearCalibration = NULL;//&FreeIMUClearCalibration;
+	fimu_funcs.FormatFlash = &FreeIMUFormatFlash;
 
 	for(;;){
 		FreeIMU_serial(&fimu_funcs);
@@ -218,6 +236,7 @@ void freeimu(void)
 int main(void)
 {
 	char outbuff[100];
+	FreeIMU_Func fimu_funcs;
 
 	SystemClock_Config();
 
@@ -261,31 +280,50 @@ int main(void)
 
 	if(EEPROMInit() < 0){
 		ExpLedOn(RED_LED);
+		ExpBuzzerTune(BUZZER_2_SHORTS_LONG);
 
 		while(1){
-			ExpBuzzerToggle();
-			HAL_Delay(300);
+			FreeIMU_serial(&fimu_funcs);
+			ExpBuzzerHandler();
 		}
 	}
 
-	ExpLedOn(RED_LED);
 	ExpLedOn(ORANGE_LED);
 
-	ImuInit();
 	TIM_Config();
 	ESC_Init();
-	AltInit();
+//	AltInit();
+	if(ImuInit() < 0){
+		ExpLedOn(RED_LED);
+		ExpBuzzerTune(BUZZER_2_SHORTS_LONG);
 
-	PIDInit();
+		while(1){
+			FreeIMU_serial(&fimu_funcs);
+			ExpBuzzerHandler();
+		}
+	}
+
+	MyPidInit();
 
 	ESC_Start(1);
 	ESC_Start(2);
 	ESC_Start(3);
 	ESC_Start(4);
 
-	ExpLedOff(RED_LED);
+	fimu_funcs.GetVersion = &FreeIMUVersion;
+	fimu_funcs.GetIMURaw = &FreeIMURaw;
+	fimu_funcs.GetBaseValues = &FreeIMUBaseInt;
+//	fimu_funcs.GetQuat = &send_quaternion;
+	fimu_funcs.GetAttitude = &FreeIMUSendYawPitchRoll;
+	fimu_funcs.LoadCalibrationValues = &FreeIMUReadCalibration;
+	fimu_funcs.Calibrate = &FreeIMUWriteCalibration;
+	fimu_funcs.ClearCalibration = &FreeIMUClearCalibration;
+	fimu_funcs.GetAttitudeBytes = &send_attitude_bytes;
+	fimu_funcs.FormatFlash = &FreeIMUFormatFlash;
+
 	ExpLedOff(ORANGE_LED);
 //freeimu();
+#define IMU_TIME		1
 #define RX_TIME			3
 #define MOTOR_TIME		3
 #define COMMS_TIME		10
@@ -294,9 +332,14 @@ int main(void)
 	uint32_t rx_time = current + 500;
 	uint32_t motor_time = current + MOTOR_TIME;
 	uint32_t comms_time = current + COMMS_TIME;		// Update comms every 100ms
+	uint32_t imu_time = current + IMU_TIME;
 	uint16_t speed_step=1;
 
+	double throttle_window=0.0;
+
 	memset(&rx_channel, 0, sizeof(PwmInfo));
+
+	PidSetSampleTime(&PIDRoll, MOTOR_TIME);
 
 /*
 	CalibVals calibration2;
@@ -332,7 +375,14 @@ int main(void)
 
 		current = HAL_GetTick();
 
-		ImuYawPitchRoll(NULL, NULL, &roll);
+//		if(current > imu_time)
+		{
+			ImuYawPitchRoll(&yaw, &pitch, &roll);
+			// Update loop time
+			imu_time = HAL_GetTick() + IMU_TIME;
+		}
+
+		FreeIMU_serial(&fimu_funcs);
 
 		if(current > rx_time)
 		{
@@ -370,51 +420,25 @@ int main(void)
 			ESC_Speed(ESC_OFF, 2);
 			ESC_Speed(ESC_OFF, 3);
 			ESC_Speed(ESC_OFF, 4);
-
-			PIDYaw.vl_PreU = 1;
-			PIDPitch.vl_PreU = 1;
-			PIDRoll.vl_PreU = 1;
-			speed_step = 1;
 		}
 
 		if(armed_flag){
-/*
-			sprintf(outbuff, "Calibration [");
-			hex_to_ascii((unsigned char*)&calibration, &outbuff[strlen(outbuff)], sizeof(CalibVals));
-			sprintf(&outbuff[strlen(outbuff)], "]\r\n");
-			VCP_write(outbuff, strlen(outbuff));
-*/
 			ExpLedOn(GREEN_LED);
 
-			if(current > motor_time){
-				// Apply throttle
-				float neg_roll;
+			if(PIDRoll.kp != (double)((rx_channel.pwmval1 - 1100)/25))
+				PidSetTunings(&PIDRoll, (rx_channel.pwmval1 - 1100)/25, 0, 0);
 
-				if(roll > 0)
-					neg_roll = -roll;
-				else
-					neg_roll = roll;
+			PIDRoll.Input = (double)roll;
 
-				PIDRoll.v_Kp = (rx_channel.pwmval1 - 1100)/25;
-				PIDRoll.vi_Ref = 0;
-				PIDRoll.vi_FeedBack = neg_roll;
-				PIDRoll.vl_PreU = speed_step;
-				speed_step = PIDCalc(&PIDRoll);
+			if(PidCompute(&PIDRoll)){
 
-				if(PIDRoll.vi_PreError < 0)
-					speed_step = -speed_step;
+				throttle_window = (((double)rx_channel.pwmval3 * 5) / 100) * (PIDRoll.Output/15);	// throttle_window = 5% of throttle value /
 
-
-				if(roll > 0)
-					speed_step = -speed_step;
-
-				motor_speed.motor1 = rx_channel.pwmval3 - speed_step;
-				motor_speed.motor2 = rx_channel.pwmval3 + speed_step;
-
-		//			ESC_Update();
-
-				motor_time = current + MOTOR_TIME;
+				motor_speed.motor1 = rx_channel.pwmval3 - (uint32_t)throttle_window;
+				motor_speed.motor2 = rx_channel.pwmval3 + (uint32_t)throttle_window;
 			}
+
+			ESC_Update();
 		}
 
 		if(calibrating_flag){
@@ -426,188 +450,20 @@ int main(void)
 			ESC_Update();
 
 		}
-
+#if 0
 		if(current > comms_time)
 		{
+			int s1 = rx_channel.pwmval3 - (uint32_t)throttle_window;
+			int s2 = rx_channel.pwmval3 + (uint32_t)throttle_window;
+			int kp = (rx_channel.pwmval1 - 1100)/25;
 
-//			sprintf(outbuff, "Armed %d Roll: %04d min: %04d max: %04d Throttle: %04d kP: %04d\r\n", (int)armed_flag, (int)roll, (int)min, (int)max, (int)rx_channel.pwmval3, (int)((rx_channel.pwmval1 - 1100)/25));
-//			sprintf(outbuff, "Armed %d Throttle: %04d Rudder: %04d kP: %04d\r\n", (int)armed_flag, (int)rx_channel.pwmval3, (int)rx_channel.pwmval4, (int)((rx_channel.pwmval1 - 1100)/25));
-			sprintf(outbuff, "Roll: %04d Throttle: %04d kP: %04d speed: %04d step: %04d\r\n", (int)roll, (int)rx_channel.pwmval3, (int)(rx_channel.pwmval1 - 1100)/25, (int)motor_speed.motor1, (int)PIDRoll.vl_PreU);
+			sprintf(outbuff, "R: %04d T: %04d kP: %04d s2: %04d s1: %04d step: %04d error: %04d\r\n", (int)roll, (int)rx_channel.pwmval3, kp, s2, s1, (int)throttle_window, (int)PIDRoll.Output);
 			VCP_write(outbuff, strlen(outbuff));
 
 			// Update loop time
 			comms_time = HAL_GetTick() + COMMS_TIME;
 		}
-
-/*
-		if(armed_flag == 0){
-			ExpLedOn(RED_LED);
-			ExpLedOff(GREEN_LED);
-
-			motorspeed = 1000;
-			speed_step = 1;
-
-			if(current % 2 == 0){	// 500HZ
-				ImuYawPitchRoll(NULL, NULL, &roll);
-			}
-
-			if(current % 30 == 10){	// 30Hz
-				ExpLedToggle(ORANGE_LED);
-
-				PwmInfo pwm;
-				GetPwmInfo(&pwm);
-
-				unarmed_process(&pwm);
-
-				if(armed_flag == 1)
-					continue;
-
-				ImuYawPitchRoll(NULL, NULL, &roll);
-				roll = roll * -1;
-
-				if(roll < min)
-					min = roll;
-
-				if(roll > max)
-					max = roll;
-
-				sprintf(outbuff, "Roll: %04d min: %04d max: %04d Throttle: %04d kP: %04d\r\n", (int)roll, (int)min, (int)max, (int)pwm.pwmval3, (int)((pwm.pwmval1 - 1100)/25));
-				VCP_write(outbuff, strlen(outbuff));
-
-				ESC_Speed(motorspeed, 4);
-			}
-
-#if 0
-			PwmInfo pwm;
-			GetPwmInfo(&pwm);
-			sprintf(outbuff, "Channel 1: %04d\r\n", pwm.pwmval1);
-			VCP_write(outbuff, strlen(outbuff));
 #endif
-		}else{
-			ExpLedOff(RED_LED);
-			ExpLedOn(GREEN_LED);
-
-			if(current % 2 == 0){	// 500HZ
-				ImuYawPitchRoll(NULL, NULL, &roll);
-			}
-
-			if(current % 30 == 10){	// 30Hz
-				ExpLedToggle(ORANGE_LED);
-
-				roll = roll * -1;
-
-				PwmInfo pwm;
-				GetPwmInfo(&pwm);
-
-				armed_process(&pwm);
-
-				if(armed_flag == 0)
-					continue;
-
-				//
-				// SAFETY FIRST!!!
-				//
-				if((rx_channel.pwmval3 >= 1000) && (rx_channel.pwmval3 <= 1800))
-					motorspeed = rx_channel.pwmval3;
-
-				if((rx_channel.pwmval1 >= 1000) && (rx_channel.pwmval1 <= 1800))
-					PIDRoll.v_Kp = (rx_channel.pwmval1 - 1100)/25;
-
-				PIDRoll.vi_Ref = 0;
-				PIDRoll.vi_FeedBack = roll;
-				PIDRoll.vl_PreU = speed_step;
-				speed_step = PIDCalc(&PIDRoll);
-
-				sprintf(outbuff, "Roll: %04d  Speed: %04d speed_step: %04d Throttle: %04d kP: %04d\r\n", (int)roll, (int)motorspeed+speed_step, speed_step, rx_channel.pwmval3, (int)PIDRoll.v_Kp);
-				VCP_write(outbuff, strlen(outbuff));
-
-//				ESC_Speed(motorspeed+speed_step, 4);
-			}
-		}
-*/
-	}
-
-/*
-		int servo_pitch=1000 + (pitch*(1000.0/90.0));
-		ESC_Speed(servo_pitch, 1);
-
-		current = HAL_GetTick();
-
-		if(current - start > 500){
-			float temperature = AltReadTemperature();
-			sprintf(outbuff, "Temp: %d\r\n", (int)temperature);
-			VCP_write(outbuff, strlen(outbuff));
-
-			int32_t pressure = AltReadPressure();
-			sprintf(outbuff, "Pressure: %d\r\n", pressure);
-			VCP_write(outbuff, strlen(outbuff));
-
-			float altitude = AltReadAltitude();
-			sprintf(outbuff, "Altitude: %d\r\n", (int32_t)altitude);
-			VCP_write(outbuff, strlen(outbuff));
-
-			start = HAL_GetTick();
-		}
-	}
-*/
-	for(;;){
-//		FreeIMU_serial(&fimu_funcs);
-/*
-		if(GetPwmInfo(&pwm)){
-
-//			sprintf(outbuff, "%d  ->  %04d  %04d  %04d  %04d\r\n", ++count, (int)pwm.pwmval1, (int)pwm.pwmval2, (int)pwm.pwmval3, (int)pwm.pwmval4);
-//			VCP_write(outbuff, strlen(outbuff));
-
-			BSP_LED_Toggle(LED5);
-
-			ESC_Speed(pwm.pwmval1, 1);
-			ESC_Speed(pwm.pwmval2, 2);
-			ESC_Speed(pwm.pwmval3, 3);
-			ESC_Speed(pwm.pwmval4, 4);
-		}
-*/
-
-		float pitch=0.0;
-		ImuYawPitchRoll(NULL, &pitch, NULL);
-
-//		int servo_pitch=1000 + (pitch*(1000.0/90.0));
-//		ESC_Speed(servo_pitch, 1);
-
-//		sprintf(outbuff, "Pitch -> %d\r\n", (int)pitch);
-//		VCP_write(outbuff, strlen(outbuff));
-
-/*
-		uint8_t id=0, type=0,cap=0;
-		FlashMemChipID(&id, &type, &cap);
-		sprintf(outbuff, "Chip 0x%02X 0x%02X 0x%02X\r\n", id, type, cap);
-		VCP_write(outbuff, strlen(outbuff));
-*/
-/*
-//		Moves a servo in step with angle
-		float pitch=0.0;
-		ImuYawPitchRoll(NULL, &pitch, NULL);
-
-		int servo_pitch=1000 + (pitch*(1000.0/90.0));
-		ESC_Speed(servo_pitch, 1);
-
-		current = HAL_GetTick();
-
-		if(current - start > 500){
-			float temperature = AltReadTemperature();
-			sprintf(outbuff, "Temp: %d\r\n", (int)temperature);
-			VCP_write(outbuff, strlen(outbuff));
-
-			int32_t pressure = AltReadPressure();
-			sprintf(outbuff, "Pressure: %d\r\n", pressure);
-			VCP_write(outbuff, strlen(outbuff));
-
-			float altitude = AltReadAltitude();
-			sprintf(outbuff, "Altitude: %d\r\n", (int32_t)altitude);
-			VCP_write(outbuff, strlen(outbuff));
-
-			start = HAL_GetTick();
-		}
-*/
 	}
 }
 
@@ -673,6 +529,21 @@ void armed_process(PwmInfo *pwm)
 		armed_flag = 0;
 VCP_write(outbuff, strlen(outbuff));
 	}
+}
+
+void MyPidInit(void)
+{
+	memset(&PIDYaw, 0, sizeof(Pid));
+	memset(&PIDRoll, 0, sizeof(Pid));
+	memset(&PIDPitch, 0, sizeof(Pid));
+
+	PidSetOutputLimits(&PIDYaw, 1000, 2000);
+	PidSetOutputLimits(&PIDRoll, -15, 15);
+	PidSetOutputLimits(&PIDPitch, 1000, 2000);
+
+	PidSetMode(&PIDYaw, AUTOMATIC);
+	PidSetMode(&PIDRoll, AUTOMATIC);
+	PidSetMode(&PIDPitch, AUTOMATIC);
 }
 
 void version(void)
