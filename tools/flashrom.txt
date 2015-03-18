@@ -1,0 +1,12 @@
+flashrom -p buspirate_spi:dev=/dev/ttyUSB0,spispeed=1M -r flash.rom -V
+
+    BP              AHRS
+--------------------------
+ 1 - Miso --------- PE13
+ 2 - CS   --------- PE11
+ 3 - MOSI --------- PE14
+ 4 - SCK  --------- PE12
+ 6 - VPU  ----------
+                    |
+ 9 - 3.3V ----------
+ 10 - Gnd
